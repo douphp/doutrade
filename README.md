@@ -16,8 +16,8 @@ DouPHP 采用「三端入口 + 共享核心 + 模块化」架构，内置会员�
 
 | 端   | 地址                             | 账号 / 密码           |
 | ---- | -------------------------------- | --------------------- |
-| 前台 | https://demo.douphp.com          | 访客 / 会员视角        |
-| 后台 | https://demo.douphp.com/admin/   | `admin` / `admin888`  |
+| 前台 | https://demo.dou.co/trade          | 访客 / 会员视角        |
+| 后台 | https://demo.dou.co/trade/admin/   | `admin` / `admin888`  |
 
 > 演示站数据定时还原，公共内容不支持修改；上传、备份、模块安装、系统升级等操作已禁用，请勿填写真实信息。
 
