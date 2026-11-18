@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <location path="." allowOverride="false" inheritInChildApplications="false">
+    <system.webServer>
+      <rewrite>
+        <rules>
+          <!-- 安全拦截：运行时临时文件禁止访问，images 目录禁止执行脚本（含 x.php.jpg 变体） -->
+          <!-- 须置于 dead-end-php 之前，否则 .php 请求会先被放行 -->
+          <rule name="deny-runtime-tmp" stopProcessing="true">
+            <match url="^storage/tmp(/|$)" ignoreCase="true" />
+            <action type="CustomResponse" statusCode="403" statusReason="Forbidden" statusDescription="Forbidden" />
+          </rule>
+          <rule name="deny-images-script" stopProcessing="true">
+            <match url="^images/.*\.(php[0-9]?|phtml|phar|pht|cgi|pl|py|asp|aspx|jsp|shtml)($|\.)" ignoreCase="true" />
+            <action type="CustomResponse" statusCode="403" statusReason="Forbidden" statusDescription="Forbidden" />
+          </rule>
+
+          <!-- 防循环：URL 已是 .php 结尾就终止，避免内部重写循环（文件不存在时 IIS 自然返回 404） -->
+          <rule name="dead-end-php" stopProcessing="true">
+            <match url="\.php$" ignoreCase="true" />
+            <action type="None" />
+          </rule>
+
+          <!-- 静态入口文件 -->
+          <rule name="static-index" stopProcessing="true">
+            <match url="^index\.html$" ignoreCase="true" />
+            <action type="Rewrite" url="index.php" appendQueryString="true" />
+          </rule>
+
+          <!-- API 入口（IsFile/IsDirectory negate 排除真实文件与真实目录） -->
+          <rule name="api-route" stopProcessing="true">
+            <match url="^api/(.+)$" ignoreCase="true" />
+            <conditions>
+              <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+              <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+            </conditions>
+            <action type="Rewrite" url="api/index.php?route={R:1}" appendQueryString="true" />
+          </rule>
+          <rule name="api-root" stopProcessing="true">
+            <match url="^api/?$" ignoreCase="true" />
+            <action type="Rewrite" url="api/index.php" appendQueryString="true" />
+          </rule>
+
+          <!-- 后台入口（IsFile/IsDirectory negate 排除 admin/view/css 等真实静态文件与真实目录） -->
+          <!-- admin/service 与物理目录同名，须优先路由，故 service 规则不判 IsDirectory -->
+          <rule name="admin-service-root" stopProcessing="true">
+            <match url="^admin/service/?$" ignoreCase="true" />
+            <action type="Rewrite" url="admin/index.php?route=service" appendQueryString="true" />
+          </rule>
+          <rule name="admin-service-route" stopProcessing="true">
+            <match url="^admin/service/(.+)$" ignoreCase="true" />
+            <action type="Rewrite" url="admin/index.php?route=service/{R:1}" appendQueryString="true" />
+          </rule>
+          <rule name="admin-route" stopProcessing="true">
+            <match url="^admin/(.+)$" ignoreCase="true" />
+            <conditions>
+              <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+              <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+            </conditions>
+            <action type="Rewrite" url="admin/index.php?route={R:1}" appendQueryString="true" />
+          </rule>
+          <rule name="admin-root" stopProcessing="true">
+            <match url="^admin/?$" ignoreCase="true" />
+            <action type="Rewrite" url="admin/index.php" appendQueryString="true" />
+          </rule>
+
+          <!-- 前台入口 -->
+          <rule name="front-route" stopProcessing="true">
+            <match url="^(.+)$" ignoreCase="true" />
+            <conditions>
+              <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+              <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+            </conditions>
+            <action type="Rewrite" url="index.php?route={R:1}" appendQueryString="true" />
+          </rule>
+        </rules>
+      </rewrite>
+    </system.webServer>
+  </location>
+</configuration>

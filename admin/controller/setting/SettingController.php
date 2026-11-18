@@ -1,0 +1,291 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Admin\Controller\Setting;
+
+use Dou\Admin\Controller\BaseController;
+use Dou\Admin\Request\Setting\SettingFormRequest;
+use Dou\Admin\Service\Setting\SettingService;
+use Dou\Core\Facade\Image;
+use Dou\Core\Filesystem\Storage;
+use Dou\Core\Foundation\Configuration\Config;
+use Dou\Core\Web\Http\Request;
+use Dou\Core\Web\Http\Response;
+use Dou\Core\Web\Http\UploadedFile;
+use Dou\Vendor\Mail\Mail;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 设置
+ */
+class SettingController extends BaseController
+{
+    /** @var SettingService */
+    private $settingService;
+
+    /** @var \Dou\Core\Filesystem\Disk */
+    private $themeDisk;
+
+    /** @var \Dou\Core\Filesystem\Disk */
+    private $miniLogoDisk;
+
+    /** @var \Dou\Core\Filesystem\Disk */
+    private $siteRootDisk;
+
+    /** @var \Dou\Core\Filesystem\Disk */
+    private $uploadDisk;
+
+    /**
+     * @param SettingService $settingService
+     */
+    public function __construct(SettingService $settingService)
+    {
+        $this->settingService = $settingService;
+        $theme = Config::get('site.site_theme', '');
+        $this->themeDisk = Storage::build($theme ? 'theme/' . $theme . '/images/' : '');
+        $miniprogramCode = Config::get('site.miniprogram_code', '');
+        $this->miniLogoDisk = Storage::build($miniprogramCode ? MINIPROGRAM_DIR . '/' . $miniprogramCode . '/images/' : '');
+        $this->siteRootDisk = Storage::build('');
+        $this->uploadDisk = Storage::build('images/upload/');
+    }
+
+    /**
+     * @param Request $request
+     * @return Response
+     */
+    public function index(Request $request)
+    {
+        $douParam = $request->input('dou');
+        $this->settingService->applyDeveloperToggle($douParam);
+        $this->settingService->syncDomainFromRoot($request->input('domain'));
+
+        if (SYSTEM_SIGN === 'api') {
+            lang_set('site_name', '小程序名称');
+            lang_set('site_logo', '小程序LOGO');
+            lang_set('site_logo_other', '小程序LOGO.另一个');
+        }
+
+        $data = $this->settingService->buildSettingIndexData($douParam);
+
+        $smarty_light = $request->rec('light');
+
+        $smsTab = (bool) Config::get('features.sms', false);
+
+        if ($data['is_developer_tab']) {
+            return $this->view('setting_developer.htm', [
+                'ur_here' => lang('config_setting_developer'),
+                'page_actions' => array(
+                    array('href' => route('admin.setting'), 'text' => lang('config_setting_system'), 'style' => ''),
+                ),
+                'page_cue' => '<em>' . lang('config_setting_developer_cue') . '</em>',
+                'rec' => 'default',
+                'light' => $smarty_light,
+                'config_list' => $data['config_list'],
+                'parameter_system_list' => $data['parameter_system_list'],
+                'parameter_customer_list' => $data['parameter_customer_list'],
+                'lang_list' => $data['lang_list'],
+                'sms_tab' => $smsTab,
+                'cfg_pure_mode' => $data['cfg_pure_mode'],
+                'column_module_list' => $data['column_module_list'],
+            ]);
+        } else {
+            $pageActions = array();
+            if (Config::get('site.developer', false)) {
+                $pageActions[] = array('href' => route('admin.setting', array(), array('query' => array('dou' => ''))), 'text' => lang('config_setting_developer'), 'style' => '');
+            }
+            return $this->view('setting.htm', [
+                'ur_here' => lang('config_setting_system'),
+                'page_actions' => $pageActions,
+                'rec' => 'default',
+                'light' => $smarty_light,
+                'config_list' => $data['config_list'],
+                'parameter_system_list' => $data['parameter_system_list'],
+                'parameter_customer_list' => $data['parameter_customer_list'],
+                'lang_list' => $data['lang_list'],
+                'sms_tab' => $smsTab,
+            ]);
+        }
+    }
+
+    /**
+     * 保存设置（字段白名单见 SettingFormRequest）。
+     *
+     * @param SettingFormRequest $formRequest
+     * @param Request $request
+     * @return Response
+     */
+    public function update(SettingFormRequest $formRequest, Request $request)
+    {
+        $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper($_SERVER['REQUEST_METHOD']) : '';
+        if ($method !== 'POST') {
+            return redirect(route('admin.setting'));
+        }
+
+        $data = $formRequest->validated();
+
+        if (!empty($_FILES['site_logo']['name'])) {
+            $data['site_logo'] = attachment()->storeToDirectory(UploadedFile::fromGlobals('site_logo'), $this->themeDisk, '', 'logo', 'main');
+        }
+        if (!empty($_FILES['site_logo_other']['name'])) {
+            $data['site_logo_other'] = attachment()->storeToDirectory(UploadedFile::fromGlobals('site_logo_other'), $this->themeDisk, '', 'logo_other', 'main');
+        }
+        if (!empty($_FILES['site_logo_miniprogram']['name'])) {
+            $data['site_logo_miniprogram'] = attachment()->storeToDirectory(UploadedFile::fromGlobals('site_logo_miniprogram'), $this->miniLogoDisk, '', 'logo', 'main');
+        }
+        if (!empty($_FILES['site_favicon']['name'])) {
+            $faviconFile = UploadedFile::fromGlobals('site_favicon');
+            if ($faviconFile instanceof UploadedFile && $faviconFile->isValid()) {
+                // 上传任意图片统一转换为站点根目录下固定 32×32 的 favicon.ico
+                if (Image::toIco($faviconFile->getRealPath(), $this->siteRootDisk->path('favicon.ico'), 32)) {
+                    $data['site_favicon'] = 'favicon.ico';
+                }
+            }
+        }
+        if (!empty($_FILES['weixin_img']['name'])) {
+            $data['weixin_img'] = attachment()->storeToDirectory(UploadedFile::fromGlobals('weixin_img'), $this->uploadDisk, '', 'weixin', 'main');
+        }
+
+        $rewriteResult = $this->settingService->persistSettingConfig($data);
+
+        $response = redirect(route('admin.setting'))->with('success', lang('edit_succes'));
+
+        if (is_array($rewriteResult)) {
+            if ($rewriteResult['state'] === 'manual') {
+                $response->with('warning', sprintf(lang('config_rewrite_write_manual'), $rewriteResult['file']));
+            } elseif ($rewriteResult['state'] === 'failed') {
+                $response->with('error', lang('config_rewrite_write_failed'));
+            } elseif ($rewriteResult['state'] === 'missing_source') {
+                $response->with('error', sprintf(lang('config_rewrite_source_missing'), $rewriteResult['file']));
+            }
+        }
+
+        return $response;
+    }
+
+    /**
+     * 邮件服务器配置测试发送。
+     *
+     * 使用当前保存的邮件服务器配置向指定收件邮箱发送一封测试邮件，
+     * 用于验证 SMTP / 内置 mail 服务是否可用。
+     *
+     * @param Request $request
+     * @return \Dou\Core\Web\Http\JsonResponse|Response
+     */
+    public function testMail(Request $request)
+    {
+        $toEmail = trim((string) $request->input('mail_test_email', ''));
+        if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+            return $this->json(array(
+                'success' => false,
+                'message' => lang('mail_test_email_invalid'),
+                'detail' => '',
+            ), 200, $this->jsonEncodeOptions());
+        }
+
+        $subject = lang('mail_test_subject');
+        $body = lang('mail_test_body') . '<br/>' . date('Y-m-d H:i:s');
+        $altBody = lang('mail_altbody');
+
+        // 发送期间先把输出缓起来，结束时一律丢弃：SMTP 调试回显、第三方库 notice 等
+        // 任何杂散输出都会污染 JSON 响应体，前端拿不到 success/message 就只能报「发送失败」。
+        $obLevel = ob_get_level();
+        ob_start();
+
+        // 收集 SMTP 调试链路，失败时展示给用户定位问题
+        $debugTraces = array();
+        try {
+            $result = Mail::sendMailResult($toEmail, $subject, $body, $altBody, $debugTraces);
+        } catch (\Exception $e) {
+            $result = array('success' => false, 'error' => $e->getMessage());
+            $debugTraces[] = get_class($e) . ': ' . $e->getMessage();
+        } catch (\Throwable $e) {
+            // PHP 7+ 的 \Error 不继承 \Exception；5.6 无 \Throwable，本分支永不匹配（仅解析占位）。
+            $result = array('success' => false, 'error' => $e->getMessage());
+            $debugTraces[] = get_class($e) . ': ' . $e->getMessage();
+        }
+
+        while (ob_get_level() > $obLevel) {
+            ob_end_clean();
+        }
+
+        if (!empty($result['success'])) {
+            return $this->json(array(
+                'success' => true,
+                'message' => lang('mail_test_success'),
+                'detail' => '',
+            ), 200, $this->jsonEncodeOptions());
+        }
+
+        $error = (isset($result['error']) && $result['error'] !== '') ? (string) $result['error'] : '';
+        $message = lang('mail_send_fail') . ($error !== '' ? '：' . $error : '');
+        $detail = '';
+        if (!empty($debugTraces)) {
+            $detail = implode("\n", $debugTraces);
+        } elseif ($error !== '') {
+            $detail = $error;
+        }
+
+        // SMTP 链路可能夹带非 UTF-8 字节（如服务端 8bit 报错文本），
+        // 一旦 json_encode 整体失败，前端只会拿到没有 message 的兜底对象而报「测试邮件发送失败」。
+        return $this->json(array(
+            'success' => false,
+            'message' => $this->ensureUtf8($message),
+            'detail' => $this->ensureUtf8($detail),
+        ), 200, $this->jsonEncodeOptions());
+    }
+
+    /**
+     * 后台 AJAX JSON 输出选项：中文直出 + 非法 UTF-8 以替代字符兜底。
+     *
+     * @return int
+     */
+    private function jsonEncodeOptions()
+    {
+        $options = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $options |= JSON_INVALID_UTF8_SUBSTITUTE;   // PHP 7.2+
+        }
+
+        return $options;
+    }
+
+    /**
+     * 保证文本为合法 UTF-8（非法序列重新编码清洗）。
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private function ensureUtf8($value)
+    {
+        $text = (string) $value;
+        if ($text === '' || preg_match('//u', $text) === 1) {
+            return $text;
+        }
+
+        if (function_exists('mb_convert_encoding')) {
+            return (string) mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        }
+        if (function_exists('iconv')) {
+            $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+            if ($clean !== false) {
+                return $clean;
+            }
+        }
+
+        return (string) preg_replace('/[\x80-\xFF]/', '?', $text);
+    }
+}

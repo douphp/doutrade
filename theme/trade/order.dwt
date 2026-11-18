@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/user.css" rel="stylesheet" type="text/css" />
+ <link href="css/order.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+ <script>var rec = "{$rec}";</script>
+ <script type="text/javascript" src="js/vue.global.js"></script>
+</head>
+
+<body>
+ <div id="wrapper">
+  {include file="inc/common_header.tpl"}
+  <div class="container">
+   <div id="order" class="mb">
+    <!-- {if $rec eq 'cart'} 购物车列表 -->
+    <div class="cart">
+     <h3>{$lang.order_cart}</h3>
+     <!-- {if $cart && $cart.list} -->
+     <div class="cartBox">
+      <dl class="head">
+       <dt><b>{$lang.order_item}</b></dt>
+       <dd><b>{$lang.price}</b></dd>
+       <dd class="number"><b>{$lang.number}</b></dd>
+       <dd><b>{$lang.order_subtotal}</b></dd>
+       <dd class="handler last"><b>{$lang.handler}</b></dd>
+      </dl>
+      <!-- {foreach from=$cart.list name=cart item=item} -->
+      <dl>
+       <dt><a href="{$item.url}"><!-- {if $item.image} --><img src="{$item.image}" width="50" height="50" /><!-- {/if} --><em>{$item.name}{$item.attribute_name}</em></a></dt>
+       <dd class="price-box"><em class="price">{$item.sale_price.format}</em><!-- {if $item.sale_price.type neq 'original'} --><i class="price-cue">{$item.sale_price.name}</i><em class="price-gray">{$item.price}</em><!-- {/if} --></dd>
+       <dd class="number">
+        <!-- {if $cart.module == 'product'} -->
+        <div class="numberBox">
+         <span class="minus" data-id="{$item.id}">−</span><input class="inp" data-id="{$item.id}" type="text" name="number[{$item.id}]" id="number_{$item.id}" value="{$item.number}" /><span class="plus" data-id="{$item.id}">+</span>
+        </div>
+        <!-- {else} -->
+        <em>x {$item.number}</em>
+        <!-- {/if} -->
+        <!-- {if $item.stock_shortage} --><em class="stock-shortage">{$lang.order_cart_stock_shortage}{$item.max_number}</em><!-- {/if} -->
+       </dd>
+       <dd id="subtotal_{$item.id}" class="subtotal">{$item.subtotal}</dd>
+       <dd class="handler last"><a href="javascript:;" onclick="douConfirm('{url link='order.cart.destroy' id=$item.id token=$token}', '{$lang.order_cart_del_confirm}')">{$lang.del}</a></dd>
+      </dl>
+      <!-- {/foreach} -->
+      <ul class="cartAction">
+       <li><a href="{$site.root_url}" class="btn-secondary">{$lang.order_continue}</a></li>
+      </ul>
+     </div>
+     <div class="cartBtn">
+      <div class="cartBtn-info">
+       <span class="cartBtn-count"><b id="total">{$cart.total}</b>{$lang.order_cart_number}</span>
+       <span class="cartBtn-amount">{$lang.order_item_amount}：<b id="item_amount">{$cart.item_amount_format}</b></span>
+      </div>
+      <a href="{url link='order.checkout'}" class="cartBtn-checkout">{$lang.order_checkout}<i>></i></a>
+     </div>
+     <!-- {/if} -->
+     <!-- {if $cart && $cart.invalid_list} -->
+     <div class="cartInvalid">
+      <h3>{$lang.order_cart_invalid}</h3>
+      <!-- {foreach from=$cart.invalid_list name=invalid item=item} -->
+      <div class="item">
+       <!-- {if $item.image} --><img src="{$item.image}" width="50" height="50" /><!-- {/if} -->
+       <em>{$item.name}</em>
+       <i>{$item.reason_text} × {$item.number}</i>
+       <a href="javascript:;" onclick="douConfirm('{url link='order.cart.destroy' id=$item.id token=$token}', '{$lang.order_cart_del_confirm}')">{$lang.del}</a>
+      </div>
+      <!-- {/foreach} -->
+      <div class="action"><a href="javascript:;" onclick="douConfirm('{url link='order.cart.clear_invalid' token=$token}', '{$lang.order_cart_clear_invalid}')">{$lang.order_cart_clear_invalid}</a></div>
+     </div>
+     <!-- {/if} -->
+     <!-- {if !$cart} -->
+     <div class="cartEmpty"><i class="bi bi-cart3"></i>{$lang.order_cart_empty}</div>
+     <!-- {/if} -->
+     <!-- {if $cart && !$cart.list && !$cart.invalid_list} -->
+     <div class="cartEmpty"><i class="bi bi-cart3"></i>{$lang.order_cart_empty}</div>
+     <!-- {/if} -->
+    </div>
+    <!-- {/if} -->
+    <!-- {if $rec eq 'checkout'} 结算页面 -->
+    <div class="checkout">
+     <h3>{$lang.order_checkout_title}</h3>
+     <div class="checkBox">
+      <form id="checkout" @submit.prevent="submitCheckout" action="{url link='order.checkout.success'}" method="post">
+       <!-- {if $cart.module == 'product' && !$param.order_quick_buy} -->
+       <div id="address">
+        <div class="box">
+         <h2>{$lang.order_consignee}</h2>
+         <div class="address">
+          <div class="title"><i class="bi bi-geo-alt"></i> <em class="edit" @click="contactPopup('edit', contact.id)">{$lang.modify}</em></div>
+          <div class="item"><em>{$lang.order_contact nofilter}: </em><b>{literal}{{contact.name}}{/literal}</b></div>
+          <div class="item"><em>{$lang.order_address}: </em><b>{literal}{{contact.address_full}}{/literal}</b></div>
+          <div class="item"><em>{$lang.order_phone}: </em><b>{literal}{{contact.phone}}{/literal}</b></div>
+          <div class="action">
+           <div class="switch" @click="contactPopup('list')">{$lang.order_consignee_switch}</div>
+           <div class="add" @click="contactPopup('add')">{$lang.user_contact_add}</div>
+          </div>
+         </div>
+        </div>
+        <p id="address_cue" class="cue"></p>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $shipping_list && $cart.module == 'product'} -->
+       <div class="box">
+        <h2>{$lang.order_shipping}</h2>
+        <div class="shipping">
+         <!-- {foreach from=$shipping_list name=shipping item=shipping} -->
+         <dl>
+          <dt><label for="{$shipping.slug}"><input type="radio" name="shipping_id" id="{$shipping.slug}" value="{$shipping.slug}" {if $shipping.slug eq $order.shipping_id || !$order.shipping_id && $shipping@first}checked="true" {/if} onclick="previewCheckout()"> {$shipping.name}</label></dt>
+          <dd>{$shipping.description}</dd>
+          <dd><!-- {if $order.mode neq 'point'} -->{$lang.order_shipping_fee}:<b class="price">{$shipping.fee_format}</b> <!-- {if $shipping.free} -->（{$shipping.free_format}）<!-- {/if} --><!-- {/if} --></dd>
+         </dl>
+         <!-- {/foreach} -->
+        </div>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $coupon_list && $order.mode neq 'point'} -->
+       <div class="box">
+        <h2>{$lang.coupon_use} <em class="cueGray">{$lang.coupon_single_cue}</em></h2>
+        <div class="coupon">
+         <div class="item">
+          <label><input type="radio" name="coupon_id" value="0" {if !$order.coupon_id}checked="true" {/if} onclick="previewCheckout()"> {$lang.coupon_no_use}</label>
+         </div>
+         <!-- {foreach from=$coupon_list name=coupon_list item=coupon} -->
+         <div class="item">
+          <label for="coupon_{$coupon.id}"><input type="radio" name="coupon_id" id="coupon_{$coupon.id}" value="{$coupon.id}" {if $coupon.id eq $order.coupon_id}checked="true" {/if} onclick="previewCheckout()"> {$coupon.name} <em>({$coupon.condition_text}, {$coupon.brief})</em><!-- {if $coupon.discount_format} --> <b class="price">-{$coupon.discount_format}</b><!-- {/if} --></label>
+         </div>
+         <!-- {/foreach} -->
+        </div>
+       </div>
+       <!-- {/if} -->
+       <h2><!-- {if $cart.module == 'product' && !$param.order_quick_buy} --><a href="{url link='order.cart'}" class="more">{$lang.order_cart_back}</a><!-- {/if} -->{$lang.order_item_list}</h2>
+       <div class="cartBox">
+        <dl class="head">
+         <dt class="big"><b>{$lang.order_item}</b></dt>
+         <dd><b><!-- {if $order.mode eq 'point'} -->{$lang.product_point}<!-- {else} -->{$lang.price}<!-- {/if} --></b></dd>
+         <dd><b>{$lang.number}</b></dd>
+         <dd class="last"><b>{$lang.order_subtotal}</b></dd>
+        </dl>
+        <!-- {foreach from=$cart.list name=cart item=item} -->
+        <dl>
+         <dt class="big"><a href="{$item.url}"><!-- {if $item.image} --><img src="{$item.image}" width="50" height="50" /><!-- {/if} --><em>{$item.name}{$item.attribute_name}</em></a></dt>
+         <dd>
+          <!-- {if $order.mode eq 'point'} -->
+          {$item.point_format}
+          <!-- {else} -->
+          <em class="price">{$item.sale_price.format}</em><!-- {if $item.sale_price.type neq 'original'} --><i class="price-cue">{$item.sale_price.name}</i><em class="price-gray">{$item.price}</em><!-- {/if} -->
+          <!-- {/if} -->
+         </dd>
+         <dd>x {$item.number}</dd>
+         <dd class="subtotal last"><!-- {if $order.mode eq 'point'} -->{$item.point_subtotal_format}<!-- {else} -->{$item.subtotal}<!-- {/if} --></dd>
+        </dl>
+        <!-- {/foreach} -->
+       </div>
+       <div class="totalAmount">
+        <!-- {if $order.mode eq 'point'} -->
+        <div class="list">
+         <dl>
+          <dt><b>{$cart.total}</b>{$lang.order_cart_number}，{$lang.order_point}：</dt>
+          <dd>{$cart.order_point_format}</dd>
+         </dl>
+        </div>
+        <!-- {else} -->
+        <div class="list">
+         <dl>
+          <dt><b>{$cart.total}</b>{$lang.order_cart_number}，{$lang.order_item_amount}：</dt>
+          <dd>{$cart.item_amount_format}</dd>
+         </dl>
+         <!-- {if $shipping_list && $cart.module == 'product'} -->
+         <dl>
+          <dt>{$lang.order_shipping_fee}：</dt>
+          <dd id="shipping_fee">{$order.shipping_fee_format}</dd>
+         </dl>
+         <!-- {/if} -->
+         <!-- {if $coupon_list && $order.mode neq 'point'} -->
+         <dl>
+          <dt>{$lang.coupon_amount}：</dt>
+          <dd id="coupon_amount">{$order.coupon_amount_format}</dd>
+         </dl>
+         <!-- {/if} -->
+         <dl>
+          <dt>{$lang.order_order_amount}：</dt>
+          <dd class="order_amount">{$order.order_amount_format}</dd>
+         </dl>
+        </div>
+        <!-- {/if} -->
+       </div>
+       <div class="orderSubmit">
+        <input type="hidden" name="token" value="{$token}" />
+        {literal}
+        <input type="hidden" name="contact_id" :value="contact.id" />
+        {/literal}
+        <input type="hidden" name="mode" value="{$order.mode}" />
+        <input type="hidden" name="quote_token" value="{$quote_token}" />
+        <input type="hidden" name="submit_token" value="{$submit_token}" />
+        <!-- {if $order.mode neq 'point'} -->
+        <span class="orderAmount">{$lang.order_order_amount}：<b class="order_amount">{$order.order_amount_format}</b></span>
+        <!-- {/if} -->
+        <button type="submit" class="submit">{$lang.order_submit}</button>
+       </div>
+      </form>
+     </div>
+     <!-- 联系人选择 -->
+     <div class="contact-box">
+      <div class="overlay" v-show="isVisible" @click="contactPopup"></div>
+      <div class="popup" {literal}:class="{'active': isVisible}" {/literal}>
+       <div class="head"><i class="bi bi-x-lg" @click="contactPopup"></i>{$lang.order_consignee}</div>
+       <div class="box">
+        <!-- 联系人选择 -->
+        <div class="list" v-if="actionType === 'list'">
+         {literal}
+         <div class="item" :class="{'active': item.cur}" v-for="item in contact_list" @click="contactSelect(item.id)"><i class="bi bi-person"></i> {{item.name}} {{item.phone}} {{item.address_full}}</div>
+         {/literal}
+        </div>
+        <!-- 联系人添加 -->
+        <div class="form" v-if="actionType === 'add' || actionType === 'edit'">
+         <form @submit.prevent="contactForm">
+          <!-- {if $cur_lang eq 'en_us'} -->
+          <div class="form-item">
+           <div class="form-label">{$lang.user_first_name}<i>*</i></div>
+           <div class="input-block">
+            <input name="first_name" type="text" class="input" v-model="formData.first_name" size="35" />
+            <p id="first_name" class="cue"></p>
+           </div>
+          </div>
+          <div class="form-item">
+           <div class="form-label">{$lang.user_last_name}<i>*</i></div>
+           <div class="input-block">
+            <input name="last_name" type="text" class="input" v-model="formData.last_name" size="35" />
+            <p id="last_name" class="cue"></p>
+           </div>
+          </div>
+          <!-- {else} -->
+          <div class="form-item">
+           <div class="form-label">{$lang.user_contact_name}<i>*</i></div>
+           <div class="input-block">
+            <input name="name" type="text" class="input" v-model="formData.name" size="35" />
+            <p id="name" class="cue"></p>
+           </div>
+          </div>
+          <!-- {/if} -->
+          <div class="form-item">
+           <div class="form-label">{$lang.user_contact_phone}<i>*</i></div>
+           <div class="input-block">
+            <input name="phone" type="text" class="input" v-model="formData.phone" size="35" />
+            <p id="phone" class="cue"></p>
+           </div>
+          </div>
+          <!-- {if $features.area} 判断是否安装地区模块 -->
+          <div class="form-item">
+           <div class="form-label">{$lang.user_contact_area}<i>*</i></div>
+           <div class="input-block" id="area">
+            {literal}
+            <select class="select" v-if="showCountrySelect" v-model="formData.country" @change="handleCountryChange">
+             <option :value="null">{/literal}{$lang.select}{literal}</option>
+             <option v-for="country in country_list" :key="country.id" :value="country.name">
+              {{country.name}}
+             </option>
+            </select>
+
+            <select class="select" v-if="province_list.length > 0" v-model="formData.province" @change="handleProvinceChange">
+             <option :value="null">{/literal}{$lang.select}{literal}</option>
+             <option v-for="province in province_list" :key="province.id" :value="province.name">
+              {{province.name}}
+             </option>
+            </select>
+
+            <select class="select" v-if="city_list.length > 0" v-model="formData.city" @change="handleCityChange">
+             <option :value="null">{/literal}{$lang.select}{literal}</option>
+             <option v-for="city in city_list" :key="city.name" :value="city.name">
+              {{city.name}}
+             </option>
+            </select>
+
+            <select class="select" v-model="formData.district" v-if="showDistrictSelect">
+             <option :value="null">{/literal}{$lang.select}{literal}</option>
+             <option v-for="district in district_list" :key="district.name" :value="district.name">
+              {{district.name}}
+             </option>
+            </select>
+            {/literal}
+            <p id="area_cue" class="cue"></p>
+           </div>
+          </div>
+          <!-- {/if} /判断是否安装地区模块 -->
+          <div class="form-item">
+           <div class="form-label">{$lang.user_contact_address}<i>*</i></div>
+           <div class="input-block">
+            <input name="address" type="text" class="input" v-model="formData.address" size="55" />
+            <p id="contact_address_cue" class="cue"></p>
+           </div>
+          </div>
+          <div class="form-item">
+           <div class="form-label">{$lang.user_contact_tag}</div>
+           <div class="input-block">
+            <input name="tag" type="text" class="input" v-model="formData.tag" size="15" />
+            <p id="tag" class="cue"></p>
+           </div>
+          </div>
+          <div class="form-item">
+           <div class="input-block">
+            <label>
+             <input name="is_default" type="checkbox" align="absMiddle" v-model="formData.is_default" /> {$lang.user_contact_is_default_set}
+            </label>
+           </div>
+          </div>
+          <div class="form-item submit">
+           <div class="input-block">
+            <input type="hidden" name="token" ref="token" value="{$token}" />
+            <input type="submit" class="btn" value="{$lang.btn_submit}" />
+           </div>
+          </div>
+         </form>
+        </div>
+       </div>
+      </div>
+     </div>
+    </div>
+    <!-- {/if} -->
+    <!-- {if $rec eq 'success'} 订单提交成功 -->
+    <div class="complete">
+     <p class="title">{$lang.order_success_title}</p>
+     <p class="info">{$lang.order_sn}：<b><a href="{$order.order_link}">{$order.order_sn}</a></b>，<!-- {if $order.mode eq 'point'} -->{$lang.product_point}：<b>{$order.order_point}</b><!-- {else} -->{$lang.order_order_amount}：<b>{$order.order_amount_format}</b><!-- {/if} --> </p>
+    </div>
+    <!-- {/if} -->
+    <!-- {if $rec eq 'cashier'} 收银台 -->
+    <div class="cashier checkout">
+     <h3>{$lang.order_cashier}<em class="timeOut">（{$order.pay_time_limit nofilter}）</em></h3>
+     <div class="info"><span class="orderAmount">{$lang.order_order_amount}：<b class="order_amount">{$order.order_amount_format}</b></span> {$lang.order_sn}：<a href="{$order.order_link}">{$order.order_sn}</a></div>
+     <div class="checkBox">
+      <form action="{$order.charge_url}" method="post" id="cashierForm" data-wallet-full="{$order.wallet_full}" data-gateway-on="{$order.gateway_remain_on_format}" data-gateway-off="{$order.gateway_remain_off_format}" data-btn-pay="{$lang.order_cashier_pay_btn}" data-btn-confirm="{$lang.order_cashier_confirm_btn}">
+       <input type="hidden" name="order_sn" value="{$order.order_sn}" />
+       <input type="hidden" name="token" value="{$order.cashier_token}" />
+       <!-- {if $order.wallet_can_use} -->
+       <div class="box walletPay">
+        <h2>{$lang.order_wallet_balance}：<b class="walletBalance">{$order.wallet_balance_format}</b></h2>
+        <label class="walletSwitch">
+         <input type="checkbox" name="use_wallet" id="use_wallet" value="1" {if $order.wallet_full}checked="checked"{/if} />
+         <span>{$lang.order_use_wallet}</span>
+        </label>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $payment_list} -->
+       <div class="box js-payment-box">
+        <h2>{$lang.order_payment}</h2>
+        <dl class="payment">
+         <!-- {foreach from=$payment_list name=payment item=payment} -->
+         <dd>
+          <input type="radio" name="pay_id" id="{$payment.id}" value="{$payment.id}" {if $payment@first} checked="true" {/if}>
+          <label for="{$payment.id}"> <img src="{$payment.image}" width="133" height="39" alt="{$payment.name}"> </label>
+         </dd>
+         <!-- {/foreach} -->
+        </dl>
+       </div>
+       <!-- {elseif $order.wallet_full} -->
+       <div class="box js-payment-box">
+        <h2>{$lang.order_payment}</h2>
+        <dl class="payment">
+         <dd>
+          <input type="radio" name="pay_id" id="wallet" value="wallet" checked="true">
+          <label for="wallet">{$lang.order_pay_wallet}</label>
+         </dd>
+        </dl>
+       </div>
+       <!-- {else} -->
+       <div class="box js-payment-box">
+        <h2>{$lang.order_payment}</h2>
+        <p class="paymentEmpty">{$lang.order_payment_empty}</p>
+       </div>
+       <!-- {/if} -->
+       <div class="amountSummary">
+        <ul>
+         <li><span>{$lang.order_order_amount}</span><b class="price">{$order.order_amount_format}</b></li>
+         <!-- {if $order.wallet_can_use} -->
+         <li class="js-wallet-deduct-row"{if !$order.wallet_full} style="display:none;"{/if}><span>{$lang.order_wallet_deduct}</span><b class="price deduct">-{$order.wallet_deduct_format}</b></li>
+         <!-- {/if} -->
+         <li class="payable"><span>{$lang.order_amount_payable}</span><b class="price js-gateway-remain">{$order.gateway_remain_format}</b></li>
+        </ul>
+       </div>
+       <div class="orderSubmit">
+        <input type="button" class="submit" value="{$lang.order_cashier_pay_btn}" onclick="cashierForm(this.form)" {if !$payment_list && !$order.wallet_full}disabled="disabled"{/if} />
+       </div>
+      </form>
+     </div>
+    </div>
+    <!-- {/if} -->
+    <!-- {if $rec eq 'charge'} 支付 -->
+    <div class="cashier checkout">
+     <h3>{$order.pay_time_limit nofilter}</h3>
+     <div class="info"><span class="orderAmount">{$lang.order_order_amount}：<b class="order_amount">{$order.order_amount_format}</b></span> {$lang.order_sn}：{$order.order_sn}</div>
+     <div class="checkBox">
+      <div class="box">
+       <!-- {if $payment} -->
+       <div class="payBox">{$payment nofilter}</div>
+       <!-- {/if} -->
+      </div>
+      <div class="otherPay">
+       <a href="{$order.cashier_url}">{$lang.order_cashier_other_pay}</a>
+      </div>
+     </div>
+    </div>
+    <!-- {/if} -->
+   </div>
+  </div>
+  {include file="inc/common_footer.tpl"}
+ </div>
+ {include file="inc/code_footer.tpl"}
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+ <script type="text/javascript" src="js/order.js"></script>
+ <script type="text/javascript" src="js/input.js"></script>
+</body>
+
+</html>

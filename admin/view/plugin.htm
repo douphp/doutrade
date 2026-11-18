@@ -1,0 +1,133 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/cloud.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou">
+ {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content">
+  {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div id="plugin" class="dou-page">
+   <!-- {if $rec eq 'default'} 插件列表 -->
+   {include file="inc/page_header.tpl"}
+   <div class="tab" data-dou-tab id="plugin-tabs">
+    <ul class="tab-nav">
+     <li class="nav-item"><a class="nav-link active" href="{url link='admin.plugin'}">{$lang.plugin_list}</a></li>
+     <li class="nav-item"><a class="nav-link" href="{url link='admin.plugin.install'}">{$lang.plugin_install}{if $unum.plugin}<span class="badge"><span>{$unum.plugin}</span></span>{/if}</a></li>
+    </ul>
+   </div>
+   <table class="table">
+    <tr>
+     <th width="100" class="text-left">{$lang.plugin_name}</th>
+     <th class="m-none text-left">{$lang.plugin_description}</th>
+     <th width="80" class="text-center">{$lang.plugin_group}</th>
+     <th width="110" class="text-center">{$lang.plugin_client}</th>
+     <th width="60" class="text-center">{$lang.plugin_ver}</th>
+     <th width="120" class="text-center">{$lang.handler}</th>
+    </tr>
+    <!-- {foreach from=$plugin_list item=plugin} -->
+    <tr {if $plugin.if_read eq '0'}class="unread"{/if}>
+     <td class="v-top">{$plugin.name}<!-- {if $plugin.deprecated} --> <span class="badge">{$lang.plugin_deprecated}</span><!-- {/if} --></td>
+     <td class="m-none v-top">{$plugin.description}</td>
+     <td class="text-center v-top">{$plugin.plugin_group_label}</td>
+     <td class="text-center v-top">{$plugin.clients_label}</td>
+     <td class="text-center v-top">{$plugin.ver}</td>
+     <td class="text-center v-top">
+      <!-- {if $plugin.deprecated} -->
+       <!-- {if $plugin.enabled} -->
+       <a href="{url link='admin.plugin.disable' slug=$plugin.slug}" class="js-post">{$lang.plugin_disable}</a> | <a href="{url link='admin.plugin.edit' slug=$plugin.slug}">{$lang.edit}</a>
+       <!-- {else} -->
+       <span class="cue">{$lang.plugin_deprecated}</span>
+       <!-- {/if} -->
+      <!-- {else} -->
+       <!-- {if $plugin.enabled} -->
+       <a href="{url link='admin.plugin.disable' slug=$plugin.slug}" class="js-post">{$lang.plugin_disable}</a> | <a href="{url link='admin.plugin.edit' slug=$plugin.slug}">{$lang.edit}</a>
+       <!-- {else} -->
+       <a href="{url link='admin.plugin.create' slug=$plugin.slug}">{$lang.plugin_enable_btn}</a> | <a href="javascript:;" class="js-delete" data-url="{url link='admin.plugin.destroy' slug=$plugin.slug}">{$lang.del}</a>
+       <!-- {/if} -->
+      <!-- {/if} -->
+     </td>
+    </tr>
+    <!-- {/foreach} -->
+   </table>
+   <!-- {/if} -->
+   <!-- {if $rec eq 'install'} 安装插件 -->
+   {include file="inc/page_header.tpl"}
+   <div class="tab" data-dou-tab id="plugin-tabs">
+    <ul class="tab-nav">
+     <li class="nav-item"><a class="nav-link" href="{url link='admin.plugin'}">{$lang.plugin_list}</a></li>
+     <li class="nav-item"><a class="nav-link active" href="{url link='admin.plugin.install'}">{$lang.plugin_install}</a></li>
+    </ul>
+   </div>
+   {include file="inc/cloud_extend_list.tpl"}
+   <!-- {/if} -->
+   <!-- {if $rec eq 'create' || $rec eq 'edit'} 插件添加或编辑 -->
+   {include file="inc/page_header.tpl"}
+   <form action="{$form_action}" method="post"><input type="hidden" name="_method" value="{$form_method}" />
+    <div class="form">
+     <div class="form-item">
+      <div class="form-label">{$lang.plugin_name}</div>
+      <div class="input-block">
+       <input type="text" name="name" value="{$plugin.name}" size="50" class="input" />
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.plugin_description}</div>
+      <div class="input-block">
+       <textarea name="description" cols="70" rows="5" class="textarea">{$plugin.description}</textarea>
+      </div>
+     </div>
+     <!-- {foreach from=$plugin.config item=config} -->
+     <div class="form-item">
+      <div class="form-label">{$config.name}</div>
+      <div class="input-block">
+       <!-- {if $config.secret} -->
+        <!-- {if $config.type eq 'textarea'} -->
+        <textarea name="config[{$config.field}]" cols="70" rows="5" class="textarea" placeholder="{if $config.has_value}{$lang.plugin_secret_set}{else}{$lang.plugin_secret_unset}{/if}"></textarea>
+        <!-- {else} -->
+        <input type="password" name="config[{$config.field}]" value="" size="50" class="input" autocomplete="new-password" placeholder="{if $config.has_value}{$lang.plugin_secret_set}{else}{$lang.plugin_secret_unset}{/if}" />
+        <!-- {/if} -->
+       <!-- {elseif $config.type eq 'select'} -->
+       <select class="select" name="config[{$config.field}]">
+        <!-- {foreach from=$config.option key=name item=value} -->
+        <option value="{$value}"{if $config.value eq $value} selected{/if}>{$name}</option>
+        <!-- {/foreach} -->
+       </select>
+       <!-- {elseif $config.type eq 'textarea'} -->
+       <textarea name="config[{$config.field}]" cols="70" rows="5" class="textarea">{$config.value}</textarea>
+       <!-- {else} -->
+       <input type="text" name="config[{$config.field}]" value="{$config.value}" size="50" class="input" />
+       <!-- {/if} -->
+       <!-- {if $config.desc} --> <p class="cue">{$config.desc}</p><!-- {/if} -->
+      </div>
+     </div>
+     <!-- {/foreach} -->
+     <div class="form-item">
+      <input type="hidden" name="token" value="{$token}" />
+      <input type="hidden" name="slug" value="{$plugin.slug}">
+      <input type="hidden" name="plugin_group" value="{$plugin.plugin_group}">
+      <input type="hidden" name="allow_client" value="{$plugin.allow_client}">
+      <input class="btn" type="submit" value="{$lang.btn_submit}" />
+     </div>
+    </div>
+   </form>
+   <!-- {/if} -->
+   </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"}
+ </div>
+</body>
+</html>

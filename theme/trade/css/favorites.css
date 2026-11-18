@@ -1,0 +1,50 @@
+/* favorites
+----------------------------------------------- */
+.favorites-list {
+ margin: 0 -10px;
+ display: flex;
+ flex-wrap: wrap;
+ justify-content: flex-start;
+}
+.favorites-list .item-box {
+ width: 25%;
+}
+@media (max-width: 992px) {
+ .favorites-list .item-box {
+  width: 50%;
+ }
+}
+.favorites-list .item {
+ border: 1px solid #EEE;
+ margin: 10px;
+}
+.favorites-list .item .img {
+ padding: 15px 15px 12px 15px;
+}
+.favorites-list .item .img img {
+ width: 100%;
+}
+.favorites-list .item .name {
+ overflow: hidden;
+ white-space: nowrap;
+ text-overflow: ellipsis;
+ padding: 0 15px 2px 15px;
+}
+.favorites-list .item .price-box {
+ padding: 0 15px 15px 15px;
+ font-size: 12px;
+}
+.favorites-list .item .action {
+ background-color: #EEE;
+ display: flex;
+ justify-content: space-between;
+}
+.favorites-list .item .action a {
+ padding: 4px 10px;
+ color: #777;
+}
+.favorites-list .item .action .del {
+ border-left: 1px solid #DDD;
+ background-color: #F5F5F5;
+ padding: 4px 20px;
+}

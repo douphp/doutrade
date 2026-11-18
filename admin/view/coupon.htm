@@ -1,0 +1,326 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/coupon.css?v=1" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div class="dou-page">
+   <!-- {if $rec eq 'default'} 优惠券列表 -->
+   {include file="inc/page_header.tpl"}
+   <div id="list">
+    <form name="action" method="post" action="{url link='admin.coupon.action'}">
+     <input type="hidden" name="token" value="{$token}" />
+     <table class="table">
+      <tr>
+       <th width="40" class="text-center">{$lang.record_id}</th>
+       <th class="text-left">{$lang.coupon_name}</th>
+       <th class="m-none text-center">{$lang.coupon_coupon_sn}</th>
+       <th class="m-none text-center">{$lang.coupon_type}</th>
+       <th class="m-none text-center">{$lang.coupon_money}</th>
+       <th class="m-none text-center">{$lang.coupon_condition}</th>
+       <th class="m-none text-center">{$lang.coupon_scope}</th>
+       <th class="m-none text-center">{$lang.coupon_issued_quantity}</th>
+       <th class="m-none text-center">{$lang.coupon_limit_per_user}</th>
+       <th class="m-none text-center">{$lang.coupon_start_at}</th>
+       <th class="m-none text-center">{$lang.coupon_end_at}</th>
+       <th class="m-none text-center">{$lang.coupon_status}</th>
+       <th width="80" class="text-center">{$lang.handler}</th>
+      </tr>
+      <!-- {foreach from=$coupon_list item=coupon} -->
+      <tr>
+       <td class="text-center">{$coupon.id}</td>
+       <td><a href="{url link='admin.coupon.edit' id=$coupon.id}">{$coupon.name}</a></td>
+       <td class="m-none text-center">{$coupon.coupon_sn}</td>
+       <td class="m-none text-center">{$coupon.type}</td>
+       <td class="m-none text-center">{$coupon.money}</td>
+       <td class="m-none text-center">{$coupon.condition}</td>
+       <td class="m-none text-center">{$coupon.scope_text}</td>
+       <td class="m-none text-center">{$coupon.issued_quantity}{if $coupon.total_quantity} / {$coupon.total_quantity}{else} / {$lang.coupon_unlimited}{/if}</td>
+       <td class="m-none text-center">{if $coupon.limit_per_user}{$coupon.limit_per_user}{else}{$lang.coupon_unlimited}{/if}</td>
+       <td class="m-none text-center">{$coupon.start_at}</td>
+       <td class="m-none text-center">{$coupon.end_at}</td>
+       <td class="m-none text-center">{$coupon.status.format}</td>
+       <td class="text-center"><a href="{url link='admin.coupon.edit' id=$coupon.id}">{$lang.edit}</a> | <a href="javascript:;" class="js-delete" data-url="{url link='admin.coupon.destroy' id=$coupon.id}">{$lang.del}</a></td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </form>
+   </div>
+   {include file="inc/pager.tpl"}
+   <!-- {/if} -->
+   <!-- {if $rec eq 'create' || $rec eq 'edit'} 优惠券添加或编辑 -->
+   {include file="inc/page_header.tpl"}
+   <form action="{$form_action}" method="post" enctype="multipart/form-data"><input type="hidden" name="_method" value="{$form_method}" />
+    {include file="inc/language_drafts.tpl" drafts=$lang_drafts}
+    <div class="form">
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_name}</div>
+      <div class="input-block">
+       <input type="text" name="name" value="{$coupon.name}" size="80" class="input" />
+       <span class="action" data-field="name">{$btn_lang.name nofilter}</span>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_type}</div>
+      <div class="input-block">
+       <select class="select" name="type" id="coupon-type">
+        <option value="money"{if $coupon.type eq 'money'} selected="selected"{/if}>{$lang.coupon_type_money}</option>
+        <option value="percent"{if $coupon.type eq 'percent'} selected="selected"{/if}>{$lang.coupon_type_percent}</option>
+       </select>
+       <input type="text" name="face_value" value="{$coupon.face_value}" size="10" class="input" />
+       <i class="input-suffix js-coupon-face-suffix">%</i>
+       <span class="js-coupon-money-unit" data-unit="{$lang.coupon_money_unit}" style="display:none;"></span>
+       <p class="cue">{$lang.coupon_type_cue}</p>
+      </div>
+     </div>
+     <div class="form-item js-coupon-percent">
+      <div class="form-label">{$lang.coupon_max_discount}</div>
+      <div class="input-block">
+       <input type="text" name="max_discount" value="{$coupon.max_discount}" size="10" class="input" />
+       <p class="cue">{$lang.coupon_max_discount_cue}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_condition}</div>
+      <div class="input-block">
+       <input type="text" name="condition" value="{$coupon.condition}" size="15" class="input" />
+       <p class="cue">{$lang.coupon_condition_cue}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_scope}</div>
+      <div class="input-block">
+       <select class="select js-coupon-scope-type" name="scope_type">
+        <option value="all"{if $coupon.scope_type eq 'all'} selected="selected"{/if}>{$lang.coupon_scope_all}</option>
+        <option value="module"{if $coupon.scope_type eq 'module'} selected="selected"{/if}>{$lang.coupon_scope_module}</option>
+        <option value="category"{if $coupon.scope_type eq 'category'} selected="selected"{/if}>{$lang.coupon_scope_category}</option>
+        <option value="product"{if $coupon.scope_type eq 'product'} selected="selected"{/if}>{$lang.coupon_scope_product}</option>
+       </select>
+       <p class="cue">{$lang.coupon_scope_cue}</p>
+       <div class="js-coupon-scope-block js-coupon-scope-module" style="display:none;">
+        <div class="transfer" data-dou-transfer data-name="scope_ids[]">
+         <div class="transfer-box">
+          <div class="transfer-header">{$lang.coupon_scope_module}</div>
+          <ul class="transfer-data">
+           <!-- {foreach from=$module_list item=module} -->
+           <li class="transfer-item"{if $module.selected} data-selected{/if}><label><input type="checkbox" value="{$module.id}" /><span>{$module.name}</span></label></li>
+           <!-- {/foreach} -->
+          </ul>
+         </div>
+         <div class="transfer-box">
+          <div class="transfer-header">{$lang.coupon_scope_selected}</div>
+          <ul class="transfer-data"></ul>
+         </div>
+        </div>
+       </div>
+       <div class="js-coupon-scope-block js-coupon-scope-category" style="display:none;">
+        <div class="transfer" data-dou-transfer data-name="scope_ids[]">
+         <div class="transfer-box">
+          <div class="transfer-header">{$lang.coupon_scope_category}</div>
+          <ul class="transfer-data">
+           <!-- {foreach from=$category_list item=category} -->
+           <li class="transfer-item"{if $category.selected} data-selected{/if}><label><input type="checkbox" value="{$category.id}" /><span>{$category.mark}{$category.name}</span></label></li>
+           <!-- {/foreach} -->
+          </ul>
+         </div>
+         <div class="transfer-box">
+          <div class="transfer-header">{$lang.coupon_scope_selected}</div>
+          <ul class="transfer-data"></ul>
+         </div>
+        </div>
+       </div>
+       <div class="js-coupon-scope-block js-coupon-scope-product" style="display:none;">
+        <div class="js-coupon-product-search" data-url="{$product_search_url}" data-empty="{$lang.coupon_products_empty}">
+         <input type="text" class="input js-coupon-product-keyword" value="" placeholder="{$lang.coupon_products_search}" size="30" />
+         <button type="button" class="btn js-coupon-product-search-btn">{$lang.coupon_search}</button>
+        </div>
+        <div class="js-coupon-product-results"></div>
+        <div class="js-coupon-product-selected">
+         <!-- {foreach from=$selected_products item=product} -->
+         <span class="coupon-product-chip"><input type="hidden" name="scope_ids[]" value="{$product.id}" />{$product.name} <a href="javascript:;" class="js-coupon-product-remove">×</a></span>
+         <!-- {/foreach} -->
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_limit_per_user}</div>
+      <div class="input-block">
+       <input type="text" name="limit_per_user" value="{$coupon.limit_per_user}" size="10" class="input" />
+       <p class="cue">{$lang.coupon_limit_per_user_cue}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_total_quantity}</div>
+      <div class="input-block">
+       <input type="text" name="total_quantity" value="{$coupon.total_quantity}" size="10" class="input" />
+       <p class="cue">{$lang.coupon_total_quantity_cue}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_is_first_order_only}</div>
+      <div class="input-block">
+       <select class="select" name="is_first_order_only">
+        <option value="0"{if $coupon.is_first_order_only eq '0'} selected="selected"{/if}>{$lang.no}</option>
+        <option value="1"{if $coupon.is_first_order_only eq '1'} selected="selected"{/if}>{$lang.yes}</option>
+       </select>
+       <p class="cue">{$lang.coupon_is_first_order_only_cue}</p>
+      </div>
+     </div>
+     <!-- {if $rec eq 'edit'} -->
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_issued_quantity}</div>
+      <div class="input-block">{$coupon.issued_quantity}{if $coupon.total_quantity} / {$coupon.total_quantity}{else} / {$lang.coupon_unlimited}{/if}</div>
+     </div>
+     <!-- {/if} -->
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_time}</div>
+      <div class="input-block">
+       <input type="text" id="start_at" name="start_at" value="{$coupon.start_at}" class="input" placeholder="{$lang.coupon_start_at}" autocomplete="off" size="15" /> ~
+       <input type="text" id="end_at" name="end_at" value="{$coupon.end_at}" class="input" placeholder="{$lang.coupon_end_at}" autocomplete="off" size="15" />
+       <script type="text/javascript" src="js/laydate/laydate.js"></script>
+       <script>
+       {literal}
+       laydate.render({
+         elem: '#start_at',
+         type: 'datetime'
+       });
+       laydate.render({
+         elem: '#end_at',
+         type: 'datetime'
+       });
+       {/literal}
+       </script>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_image}</div>
+      <div class="input-block">
+       {include file="inc/file_image.tpl" name="image" value=$coupon.image file_number=$coupon.file_number}
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_brief}</div>
+      <div class="input-block">
+       <textarea name="brief" cols="80" rows="2" class="textarea" />{$coupon.brief}</textarea>
+       <p class="action" data-field="brief">{$btn_lang.brief nofilter}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.coupon_status}</div>
+      <div class="input-block">
+       <select class="select" name="status">
+        <option value="1"{if $coupon.status eq '1'} selected{/if}>{$lang.coupon_status_1}</option>
+        <option value="0"{if $coupon.status eq '0'} selected{/if}>{$lang.coupon_status_0}</option>
+       </select>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.sort}</div>
+      <div class="input-block">
+       <input type="text" name="sort" value="{$coupon.sort}" size="5" class="input" />
+      </div>
+     </div>
+     <div class="form-item">
+      <input type="hidden" name="token" value="{$token}" />
+      <input type="hidden" name="id" value="{$coupon.id}">
+      <input class="btn" type="submit" value="{$lang.btn_submit}" />
+     </div>
+    </div>
+   </form>
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"} </div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+{literal}
+ onload = function() {document.forms['action'].reset();}
+{/literal}
+</script>
+<!-- {/if} -->
+<!-- {if $rec eq 'create' || $rec eq 'edit'} -->
+<script type="text/javascript">
+{literal}
+$(function () {
+  var moneyUnit = $('.js-coupon-money-unit').data('unit') || '';
+
+  function syncType() {
+    var type = $('#coupon-type').val();
+    $('.js-coupon-percent').toggle(type === 'percent').find('input').prop('disabled', type !== 'percent');
+    $('.js-coupon-face-suffix').text(type === 'percent' ? '%' : moneyUnit);
+  }
+
+  function syncScope() {
+    var scope = $('.js-coupon-scope-type').val();
+    $('.js-coupon-scope-block').each(function () {
+      var show = $(this).hasClass('js-coupon-scope-' + scope);
+      $(this).toggle(show);
+      $(this).find('input, select, textarea').prop('disabled', !show);
+    });
+  }
+
+  function addProduct(id, name) {
+    if ($('.js-coupon-product-selected input[value="' + id + '"]').length) {
+      return;
+    }
+    var $chip = $('<span class="coupon-product-chip"></span>');
+    $chip.append($('<input type="hidden" name="scope_ids[]" />').val(id));
+    $chip.append(document.createTextNode(name + ' '));
+    $chip.append('<a href="javascript:;" class="js-coupon-product-remove">×</a>');
+    $('.js-coupon-product-selected').append($chip);
+  }
+
+  $('#coupon-type').on('change', syncType);
+  $('.js-coupon-scope-type').on('change', syncScope);
+  syncType();
+  syncScope();
+
+  $(document).on('click', '.js-coupon-product-remove', function () {
+    $(this).closest('.coupon-product-chip').remove();
+  });
+
+  $(document).on('click', '.js-coupon-product-result', function () {
+    addProduct($(this).data('id'), $(this).data('name'));
+    $(this).remove();
+  });
+
+  $('.js-coupon-product-search-btn').on('click', function () {
+    var $box = $('.js-coupon-product-search');
+    var keyword = $.trim($('.js-coupon-product-keyword').val());
+    var $results = $('.js-coupon-product-results').empty();
+    $.get($box.data('url'), {keyword: keyword, limit: 20}, function (res) {
+      var list = res && res.data ? res.data : [];
+      if (!list.length) {
+        $results.text($box.data('empty'));
+        return;
+      }
+      $.each(list, function (i, item) {
+        $('<a href="javascript:;" class="js-coupon-product-result"></a>')
+          .attr('data-id', item.id)
+          .data('name', item.name)
+          .text(item.name + ' (' + item.price_format + ')')
+          .appendTo($results);
+      });
+    }, 'json');
+  });
+});
+{/literal}
+</script>
+<!-- {/if} -->
+</body>
+</html>

@@ -1,0 +1,401 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/order_report.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div id="order_report" class="dou-page">
+   {include file="inc/page_header.tpl"}
+
+   <ul class="report-tabs">
+    <li{if $rec eq 'overview'} class="cur"{/if}><a href="{url link='admin.order.report' preset=$ctx.preset date_start=$ctx.date_start date_end=$ctx.date_end module=$ctx.module granularity=$ctx.granularity}">{$lang.order_report_overview}</a></li>
+    <li{if $rec eq 'product'} class="cur"{/if}><a href="{url link='admin.order.report.product' preset=$ctx.preset date_start=$ctx.date_start date_end=$ctx.date_end module=$ctx.module granularity=$ctx.granularity}">{$lang.order_report_product}</a></li>
+    <li{if $rec eq 'customer'} class="cur"{/if}><a href="{url link='admin.order.report.customer' preset=$ctx.preset date_start=$ctx.date_start date_end=$ctx.date_end module=$ctx.module granularity=$ctx.granularity}">{$lang.order_report_customer}</a></li>
+    <li{if $rec eq 'payment'} class="cur"{/if}><a href="{url link='admin.order.report.payment' preset=$ctx.preset date_start=$ctx.date_start date_end=$ctx.date_end module=$ctx.module granularity=$ctx.granularity}">{$lang.order_report_payment}</a></li>
+   </ul>
+
+   <div class="filter">
+    <div class="filter-presets">
+     <a class="btn-secondary {if $ctx.preset eq 'today'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='today' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='today' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='today' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='today' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_today}</a>
+     <a class="btn-secondary {if $ctx.preset eq 'yesterday'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='yesterday' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='yesterday' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='yesterday' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='yesterday' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_yesterday}</a>
+     <a class="btn-secondary {if $ctx.preset eq 'last_7'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='last_7' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='last_7' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='last_7' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='last_7' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_last_7}</a>
+     <a class="btn-secondary {if $ctx.preset eq 'last_30'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='last_30' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='last_30' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='last_30' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='last_30' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_last_30}</a>
+     <a class="btn-secondary {if $ctx.preset eq 'this_month'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='this_month' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='this_month' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='this_month' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='this_month' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_this_month}</a>
+     <a class="btn-secondary {if $ctx.preset eq 'last_month'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='last_month' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='last_month' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='last_month' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='last_month' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_last_month}</a>
+     <a class="btn-secondary {if $ctx.preset eq 'this_year'}cur{/if}" href="{if $rec eq 'product'}{url link='admin.order.report.product' preset='this_year' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'customer'}{url link='admin.order.report.customer' preset='this_year' module=$ctx.module granularity=$ctx.granularity}{elseif $rec eq 'payment'}{url link='admin.order.report.payment' preset='this_year' module=$ctx.module granularity=$ctx.granularity}{else}{url link='admin.order.report' preset='this_year' module=$ctx.module granularity=$ctx.granularity}{/if}">{$lang.order_report_preset_this_year}</a>
+    </div>
+    <form action="{if $rec eq 'product'}{url link='admin.order.report.product'}{elseif $rec eq 'customer'}{url link='admin.order.report.customer'}{elseif $rec eq 'payment'}{url link='admin.order.report.payment'}{else}{url link='admin.order.report'}{/if}" method="get" class="filter-form" onsubmit="return hideEmpty(this)">
+     <input type="hidden" name="preset" value="custom" />
+     <script type="text/javascript" src="js/laydate/laydate.js"></script>
+     <input type="text" id="date_start" name="date_start" value="{$ctx.date_start}" class="input" size="10" placeholder="{$lang.time_start}" autocomplete="off" />
+     <input type="text" id="date_end" name="date_end" value="{$ctx.date_end}" class="input" size="10" placeholder="{$lang.time_end}" autocomplete="off" />
+     <script>
+     {literal}
+     laydate.render({ elem: '#date_start', type: 'date' });
+     laydate.render({ elem: '#date_end', type: 'date' });
+     {/literal}
+     </script>
+     <select name="module" class="select">
+      <option value="">{$lang.order_report_module_all}</option>
+      <!-- {foreach from=$ctx.modules item=m} -->
+      <option value="{$m}"{if $ctx.module eq $m} selected="selected"{/if}>{$m}</option>
+      <!-- {/foreach} -->
+     </select>
+     <select name="granularity" class="select">
+      <option value="day"{if $ctx.granularity eq 'day'} selected="selected"{/if}>{$lang.order_report_granularity_day}</option>
+      <option value="month"{if $ctx.granularity eq 'month'} selected="selected"{/if}>{$lang.order_report_granularity_month}</option>
+     </select>
+     <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+     <a class="btn-secondary" href="{url link='admin.order.report.export' preset=$ctx.preset date_start=$ctx.date_start date_end=$ctx.date_end module=$ctx.module token=$token}">{$lang.order_report_export}</a>
+    </form>
+   </div>
+
+   <!-- {if $rec eq 'overview'} -->
+   <div class="kpi-grid">
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_revenue}</div>
+     <div class="kpi-value">{$site.currency_base_symbol}{$kpis.revenue.current|string_format:"%.2f"}</div>
+     <div class="kpi-delta dir-{$kpis.revenue.direction}">
+      {if $kpis.revenue.has_compare}{$kpis.revenue.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$site.currency_base_symbol}{$kpis.revenue.previous|string_format:"%.2f"}</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_orders}</div>
+     <div class="kpi-value">{$kpis.orders.current|string_format:"%d"}</div>
+     <div class="kpi-delta dir-{$kpis.orders.direction}">
+      {if $kpis.orders.has_compare}{$kpis.orders.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$kpis.orders.previous|string_format:"%d"}</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_aov}</div>
+     <div class="kpi-value">{$site.currency_base_symbol}{$kpis.aov.current|string_format:"%.2f"}</div>
+     <div class="kpi-delta dir-{$kpis.aov.direction}">
+      {if $kpis.aov.has_compare}{$kpis.aov.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$site.currency_base_symbol}{$kpis.aov.previous|string_format:"%.2f"}</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_paying_users}</div>
+     <div class="kpi-value">{$kpis.paying_users.current|string_format:"%d"}</div>
+     <div class="kpi-delta dir-{$kpis.paying_users.direction}">
+      {if $kpis.paying_users.has_compare}{$kpis.paying_users.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$kpis.paying_users.previous|string_format:"%d"}</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_new_paying_users}</div>
+     <div class="kpi-value">{$kpis.new_paying_users.current|string_format:"%d"}</div>
+     <div class="kpi-delta dir-{$kpis.new_paying_users.direction}">
+      {if $kpis.new_paying_users.has_compare}{$kpis.new_paying_users.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$kpis.new_paying_users.previous|string_format:"%d"}</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_refund_amount}</div>
+     <div class="kpi-value">{$site.currency_base_symbol}{$kpis.refund_amount.current|string_format:"%.2f"}</div>
+     <div class="kpi-delta dir-{$kpis.refund_amount.direction}">
+      {if $kpis.refund_amount.has_compare}{$kpis.refund_amount.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$site.currency_base_symbol}{$kpis.refund_amount.previous|string_format:"%.2f"}</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_refund_rate}</div>
+     <div class="kpi-value">{$kpis.refund_rate.current|string_format:"%.2f"}%</div>
+     <div class="kpi-delta dir-{$kpis.refund_rate.direction}">
+      {if $kpis.refund_rate.has_compare}{$kpis.refund_rate.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$kpis.refund_rate.previous|string_format:"%.2f"}%</span>
+     </div>
+    </div>
+    <div class="kpi-card">
+     <div class="kpi-label">{$lang.order_report_net_revenue}</div>
+     <div class="kpi-value">{$site.currency_base_symbol}{$kpis.net_revenue.current|string_format:"%.2f"}</div>
+     <div class="kpi-delta dir-{$kpis.net_revenue.direction}">
+      {if $kpis.net_revenue.has_compare}{$kpis.net_revenue.delta_percent}%{else}-{/if}
+      <span class="kpi-prev">{$lang.order_report_compare_period}: {$site.currency_base_symbol}{$kpis.net_revenue.previous|string_format:"%.2f"}</span>
+     </div>
+    </div>
+   </div>
+
+   <div class="chart-row">
+    <div class="chart-card">
+     <h3>{$lang.order_report_trend_title}</h3>
+     <div id="chart-trend" class="chart-canvas"></div>
+    </div>
+   </div>
+
+   <div class="chart-row two-col">
+    <div class="chart-card">
+     <h3>{$lang.order_report_status_funnel}</h3>
+     <table class="table">
+      <tr>
+       <th class="text-left">{$lang.order_report_status}</th>
+       <th class="text-right">{$lang.order_report_count}</th>
+       <th class="text-right">{$lang.order_report_share}</th>
+      </tr>
+      <!-- {foreach from=$status_funnel item=row} -->
+      <tr>
+       <td><span class="badge-{$row.badge}">{$row.label}</span></td>
+       <td class="text-right">{$row.count}</td>
+       <td class="text-right">{$row.share}%</td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </div>
+    <div class="chart-card">
+     <h3>{$lang.order_report_category_breakdown}</h3>
+     <div id="chart-category" class="chart-canvas"></div>
+    </div>
+   </div>
+   <!-- {/if} -->
+
+   <!-- {if $rec eq 'product'} -->
+   <div class="chart-row two-col">
+    <div class="chart-card">
+     <h3>{$lang.order_report_category_breakdown}</h3>
+     <div id="chart-category" class="chart-canvas"></div>
+    </div>
+    <div class="chart-card">
+     <h3>{$lang.order_report_top_products}</h3>
+     <div id="chart-top-products" class="chart-canvas"></div>
+    </div>
+   </div>
+   <div class="chart-row">
+    <div class="chart-card">
+     <h3>{$lang.order_report_top_products}</h3>
+     <table class="table">
+      <tr>
+       <th width="50">#</th>
+       <th class="text-left">{$lang.order_report_product_name}</th>
+       <th width="80" class="text-center">{$lang.order_report_module}</th>
+       <th width="100" class="text-right">{$lang.order_report_qty}</th>
+       <th width="120" class="text-right">{$lang.order_report_revenue}</th>
+       <th width="100" class="text-right">{$lang.order_report_aov}</th>
+       <th width="80" class="text-right">{$lang.order_report_share}</th>
+      </tr>
+      <!-- {foreach from=$top_products item=row name=p key=k} -->
+      <tr>
+       <td class="text-center">{$row@iteration}</td>
+       <td>{$row.name}</td>
+       <td class="text-center">{$row.module}</td>
+       <td class="text-right">{$row.qty}</td>
+       <td class="text-right">{$site.currency_base_symbol}{$row.revenue|string_format:"%.2f"}</td>
+       <td class="text-right">{$site.currency_base_symbol}{$row.aov|string_format:"%.2f"}</td>
+       <td class="text-right">{$row.share}%</td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </div>
+   </div>
+   <!-- {/if} -->
+
+   <!-- {if $rec eq 'customer'} -->
+   <div class="chart-row">
+    <div class="chart-card">
+     <h3>{$lang.order_report_new_vs_returning}</h3>
+     <div class="kpi-grid two-col">
+      <div class="kpi-card">
+       <div class="kpi-label">{$lang.order_report_new_users}</div>
+       <div class="kpi-value">{$new_vs_returning.new_users}</div>
+       <div class="kpi-delta">{$site.currency_base_symbol}{$new_vs_returning.new_revenue|string_format:"%.2f"} / {$new_vs_returning.new_orders} {$lang.order_report_orders}</div>
+      </div>
+      <div class="kpi-card">
+       <div class="kpi-label">{$lang.order_report_returning_users}</div>
+       <div class="kpi-value">{$new_vs_returning.returning_users}</div>
+       <div class="kpi-delta">{$site.currency_base_symbol}{$new_vs_returning.returning_revenue|string_format:"%.2f"} / {$new_vs_returning.returning_orders} {$lang.order_report_orders}</div>
+      </div>
+     </div>
+    </div>
+   </div>
+   <div class="chart-row">
+    <div class="chart-card">
+     <h3>{$lang.order_report_top_customers}</h3>
+     <table class="table">
+      <tr>
+       <th width="50">#</th>
+       <th class="text-left">{$lang.order_report_username}</th>
+       <th width="100" class="text-right">{$lang.order_report_orders}</th>
+       <th width="120" class="text-right">{$lang.order_report_revenue}</th>
+       <th width="100" class="text-right">{$lang.order_report_aov}</th>
+       <th width="160" class="text-left">{$lang.order_report_last_pay}</th>
+      </tr>
+      <!-- {foreach from=$top_customers item=row name=c key=k} -->
+      <tr>
+       <td class="text-center">{$row@iteration}</td>
+       <td>{if $row.username}{$row.username}{else}#{$row.user_id}{/if}</td>
+       <td class="text-right">{$row.orders}</td>
+       <td class="text-right">{$site.currency_base_symbol}{$row.revenue|string_format:"%.2f"}</td>
+       <td class="text-right">{$site.currency_base_symbol}{$row.aov|string_format:"%.2f"}</td>
+       <td>{$row.last_pay_text}</td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </div>
+   </div>
+   <!-- {/if} -->
+
+   <!-- {if $rec eq 'payment'} -->
+   <div class="chart-row two-col">
+    <div class="chart-card">
+     <h3>{$lang.order_report_payment_methods}</h3>
+     <div id="chart-gateways" class="chart-canvas"></div>
+    </div>
+    <div class="chart-card">
+     <h3>{$lang.order_report_refund_trend}</h3>
+     <div id="chart-refund-trend" class="chart-canvas"></div>
+    </div>
+   </div>
+   <div class="chart-row">
+    <div class="chart-card">
+     <h3>{$lang.order_report_payment_methods}</h3>
+     <table class="table">
+      <tr>
+       <th class="text-left">{$lang.order_report_pay_name}</th>
+       <th width="100" class="text-right">{$lang.order_report_orders}</th>
+       <th width="120" class="text-right">{$lang.order_report_revenue}</th>
+       <th width="80" class="text-right">{$lang.order_report_share}</th>
+      </tr>
+      <!-- {foreach from=$gateways item=row} -->
+      <tr>
+       <td>{$row.pay_name}</td>
+       <td class="text-right">{$row.orders}</td>
+       <td class="text-right">{$site.currency_base_symbol}{$row.revenue|string_format:"%.2f"}</td>
+       <td class="text-right">{$row.share}%</td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </div>
+   </div>
+   <div class="chart-row">
+    <div class="chart-card">
+     <h3>{$lang.order_report_top_refunds}</h3>
+     <table class="table">
+      <tr>
+       <th width="50">#</th>
+       <th class="text-left">{$lang.order_report_order_sn}</th>
+       <th width="120" class="text-right">{$lang.order_report_refund_amount}</th>
+       <th width="160" class="text-left">{$lang.order_report_refunded_at}</th>
+      </tr>
+      <!-- {foreach from=$refund_top_orders item=row name=r key=k} -->
+      <tr>
+       <td class="text-center">{$row@iteration}</td>
+       <td><a href="{url link='admin.order.show' order_id=$row.order_id}">{$row.order_sn}</a></td>
+       <td class="text-right">{$site.currency_base_symbol}{$row.amount|string_format:"%.2f"}</td>
+       <td>{$row.refunded_at_text}</td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </div>
+   </div>
+   <!-- {/if} -->
+
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"}
+</div>
+
+<script type="text/javascript" src="js/echarts.min.js"></script>
+<script type="text/javascript">
+{literal}
+(function () {
+    var rec = "{/literal}{$rec}{literal}";
+    var data = {/literal}{$charts_json nofilter}{literal};
+    if (!data || typeof echarts === 'undefined') { return; }
+
+    function init(id, builder) {
+        var el = document.getElementById(id);
+        if (!el) { return; }
+        var chart = echarts.init(el);
+        chart.setOption(builder());
+        window.addEventListener('resize', function () { chart.resize(); });
+    }
+
+    if (rec === 'overview') {
+        init('chart-trend', function () {
+            return {
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['{/literal}{$lang.order_report_revenue}{literal}', '{/literal}{$lang.order_report_orders}{literal}', '{/literal}{$lang.order_report_compare_period}{literal}'] },
+                xAxis: { type: 'category', data: data.trend.labels },
+                yAxis: [
+                    { type: 'value', name: '{$site.currency_base_symbol}', position: 'left' },
+                    { type: 'value', name: '#', position: 'right' }
+                ],
+                series: [
+                    { name: '{/literal}{$lang.order_report_revenue}{literal}', type: 'line', smooth: true, data: data.trend.revenue, yAxisIndex: 0 },
+                    { name: '{/literal}{$lang.order_report_orders}{literal}', type: 'bar', data: data.trend.orders, yAxisIndex: 1 },
+                    { name: '{/literal}{$lang.order_report_compare_period}{literal}', type: 'line', smooth: true, lineStyle: { type: 'dashed' }, data: data.trend.prev_revenue, yAxisIndex: 0 }
+                ]
+            };
+        });
+        init('chart-category', function () {
+            var items = [];
+            for (var i = 0; i < data.category.labels.length; i++) {
+                items.push({ name: data.category.labels[i], value: data.category.values[i] });
+            }
+            return {
+                tooltip: { trigger: 'item' },
+                series: [{ name: '{/literal}{$lang.order_report_category_breakdown}{literal}', type: 'pie', radius: ['40%', '70%'], data: items }]
+            };
+        });
+    } else if (rec === 'product') {
+        init('chart-category', function () {
+            var items = [];
+            for (var i = 0; i < data.category.labels.length; i++) {
+                items.push({ name: data.category.labels[i], value: data.category.values[i] });
+            }
+            return {
+                tooltip: { trigger: 'item' },
+                series: [{ type: 'pie', radius: ['40%', '70%'], data: items }]
+            };
+        });
+        init('chart-top-products', function () {
+            return {
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                xAxis: { type: 'value' },
+                yAxis: { type: 'category', data: data.top_products.labels.slice().reverse() },
+                grid: { left: '20%' },
+                series: [{ type: 'bar', data: data.top_products.values.slice().reverse() }]
+            };
+        });
+    } else if (rec === 'payment') {
+        init('chart-gateways', function () {
+            var items = [];
+            for (var i = 0; i < data.gateways.labels.length; i++) {
+                items.push({ name: data.gateways.labels[i], value: data.gateways.values[i] });
+            }
+            return {
+                tooltip: { trigger: 'item' },
+                series: [{ type: 'pie', radius: ['40%', '70%'], data: items }]
+            };
+        });
+        init('chart-refund-trend', function () {
+            return {
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: data.refund_trend.labels },
+                yAxis: { type: 'value', name: '{$site.currency_base_symbol}' },
+                series: [{ type: 'line', smooth: true, data: data.refund_trend.values }]
+            };
+        });
+    }
+})();
+{/literal}
+</script>
+</body>
+</html>
+
+

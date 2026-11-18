@@ -1,0 +1,4975 @@
+/**
+ +----------------------------------------------------------
+ * 页面加载时运行
+ +----------------------------------------------------------
+ */
+$(function () {
+  // 删除按钮事件委托（替代内联 onclick="douDelete(...)"，避免单引号嵌套冲突）
+  // 配合 data-url 提供删除地址，data-confirm 可选提供确认文案
+  $(document).on("click", ".js-delete", function (e) {
+    e.preventDefault();
+    var url = $(this).data("url");
+    var confirmMsg = $(this).data("confirm");
+    return douDelete(url, confirmMsg);
+  });
+
+  // 通用 POST 动作事件委托（替代内联 onclick="douPost(...)"，避免单引号嵌套冲突）
+  // 优先读 data-url，否则回退到 <a> 的 href；data-modal-confirm 优先走 dou-modal 确认弹窗，
+  // 否则回退到 data-confirm 的原生 confirm
+  $(document).on("click", ".js-post", function (e) {
+    e.preventDefault();
+    var $btn = $(this);
+    var url = $btn.data("url") || this.href;
+    var modalMsg = $btn.data("modal-confirm");
+    if (modalMsg) {
+      douConfirm(modalMsg, function () {
+        douPost(url);
+      }, $btn.data("modal-title"));
+      return false;
+    }
+    var confirmMsg = $btn.data("confirm");
+    return douPost(url, confirmMsg);
+  });
+
+  // 行内布尔切换事件委托（js-toggle 协议）——AJAX 无刷新切换，
+  // 取代 js-post 整页式启停与 Alpine changeField。协议与接入方法：
+  //
+  //   <a href="javascript:;" class="js-toggle"
+  //      data-url="/admin/..."                       切换端点（POST，成功须返回 {code:'OK', message, data:{value:1|0}}）
+  //      data-post='{"module":"product","item_id":5,"field":"status"}'
+  //                                                  随请求提交的业务参数（JSON，可省略；参数走 URL 时无需）
+  //      data-state="on|off"                         当前状态（on=1 显示/启用，off=0 隐藏/停用）
+  //      data-text-on / data-text-off                状态为 on/off 时本元素显示的文字（可省略）
+  //      data-on-class / data-off-class              状态为 on/off 时本元素的 class（可省略）
+  //      data-confirm-on / data-confirm-off          转为 on/off 前的确认文案（可省略，缺省不弹窗）
+  //      ></a>
+  //
+  //   状态药丸形态（.status-pill）是默认场景：内层双 span 与缺省文案由 initToggleDefaults()
+  //   自动补全（data-text-on/off 缺省为「显示/隐藏」），配色由 data-state 属性驱动，
+  //   因此只需 url + state + 当前文字，例如：
+  //   <em class="link js-toggle status-pill" data-url="..." data-state="on">显示</em>
+  //   显式配置同名 data-* 属性即可覆盖默认值（如需「是/否」等文案）。
+  //
+  //   同一行内可放多个纯展示徽章 class="js-toggle-view"（text/class 属性同上，随状态一起翻转）；
+  //   所在 <tr> 可声明 data-off-row-class="row-disabled"（值为 off 时加类，整行灰显）。
+  //   服务端：$request->wantsJson() 时返回 ApiResponse::success(['value' => 新值, ...], 文案)，
+  //   可复用 BaseController::respondToggle()。参考：ai_model.htm 供应商启停、product.htm 状态列。
+  $(document).on("click", ".js-toggle", function (e) {
+    e.preventDefault();
+    return douToggle($(this));
+  });
+
+  // 状态药丸按钮默认值补全（幂等；AJAX 插入的行在点击时还会再补一次）
+  initToggleDefaults();
+
+  // 下拉菜单
+  var $dropMenu = $('[data-dou-toggle="dropdown"]');
+  if ($dropMenu.length) {
+    $dropMenu.hover(
+      function () {
+        $(this).addClass("active");
+      },
+      function () {
+        $(this).removeClass("active");
+      },
+    );
+  }
+
+  // 侧栏栏目子菜单：同一份 ul.sub-menu 两种形态——当前模块（li.cur）内联展开由 CSS 控制，
+  // 非当前模块悬停弹出。.menu-scroll 有 overflow 裁剪，弹层用 fixed 定位逃出，JS 仅补视口坐标。
+  $("#dou-sidebar").on("mouseenter", ".menu-scroll li.has-sub:not(.cur)", function () {
+    var $sub = $(this).children("ul.sub-menu");
+    if (!$sub.length) {
+      return;
+    }
+    var sidebar = $("#dou-sidebar");
+    var popTop = this.getBoundingClientRect().top;
+    var popHeight = $sub.outerHeight();
+    if (popTop + popHeight > $(window).height()) {
+      popTop = $(window).height() - popHeight;
+    }
+    $sub.css({ top: popTop, left: sidebar.offset().left + sidebar.outerWidth() - 3 });
+  });
+
+  // 侧栏弹层防误触：从输入框/文本域向左拖选文字时，指针会滑过侧栏并停留，
+  // 超过 CSS 的 300ms 延迟就会弹出子菜单，遮挡右侧表单输入区域。
+  // 弹层显隐由 CSS :hover 决定、JS 无法直接拦截，故用类名加锁：拖选期间强制隐藏弹层，
+  // 指针离开侧栏或在侧栏外松开鼠标后解锁，不影响正常的悬停弹出。
+  (function () {
+    var sidebarEl = document.getElementById("dou-sidebar");
+    if (!sidebarEl) {
+      return;
+    }
+    var locked = false;
+    // 可选中文字的输入控件类型（排除按钮、勾选、文件、日期选择等）
+    var textTypes = ["text", "search", "email", "url", "tel", "password", "number"];
+
+    function isTextField(el) {
+      if (!el || el.nodeType !== 1) {
+        return false;
+      }
+      if (el.isContentEditable) {
+        return true;
+      }
+      if (el.tagName === "TEXTAREA") {
+        return true;
+      }
+      if (el.tagName === "INPUT") {
+        var type = (el.getAttribute("type") || "text").toLowerCase();
+        return type === "" || $.inArray(type, textTypes) !== -1;
+      }
+      return false;
+    }
+
+    function inSidebar(x, y) {
+      var rect = sidebarEl.getBoundingClientRect();
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+
+    function lock() {
+      if (!locked) {
+        locked = true;
+        $(sidebarEl).addClass("dou-sub-locked");
+      }
+    }
+
+    function unlock() {
+      if (locked) {
+        locked = false;
+        $(sidebarEl).removeClass("dou-sub-locked");
+      }
+    }
+
+    // 在文本控件内按下鼠标即加锁：按住期间指针滑到侧栏也不会弹出。
+    // 捕获阶段监听，避免表单内部的 stopPropagation 漏判
+    document.addEventListener(
+      "mousedown",
+      function (e) {
+        if (isTextField(e.target)) {
+          lock();
+        }
+      },
+      true,
+    );
+
+    // 兜底加锁：iframe 编辑器内拖选时父文档收不到 mousedown，但指针拖出后能收到 mousemove，
+    // 按住左键进入侧栏即视为拖选；指针在侧栏外且已松开按键时解锁
+    document.addEventListener("mousemove", function (e) {
+      // 未锁定且未按键时无需判断，避免无谓的布局读取
+      if (!locked && (e.buttons === 0 || e.buttons === undefined)) {
+        return;
+      }
+      if (inSidebar(e.clientX, e.clientY)) {
+        if (e.buttons === 1) {
+          lock();
+        }
+      } else if (e.buttons === 0) {
+        unlock();
+      }
+    });
+
+    // 在侧栏外松开鼠标：拖选结束且指针没落在侧栏上，无需继续锁。
+    // 松手时指针仍在侧栏上则保持锁定，等指针移出侧栏再解锁，避免立刻弹层
+    document.addEventListener("mouseup", function (e) {
+      if (!inSidebar(e.clientX, e.clientY)) {
+        unlock();
+      }
+    });
+
+    // 窗口失焦（如拖到浏览器外松手）时兜底解锁
+    $(window).on("blur", unlock);
+  })();
+
+  // 点击菜单项时保存滚动位置
+  $(".menu-scroll").on("click", "a", function () {
+    var $menu = $(this).closest(".menu-scroll");
+    if ($menu.length) {
+      localStorage.setItem("menuScrollPosition", $menu.scrollTop());
+    }
+  });
+
+  if ($("#index").length) {
+    localStorage.removeItem("menuScrollPosition");
+  }
+
+  // 页面加载时恢复滚动位置
+  var $menu = $(".menu-scroll");
+  if ($menu.length) {
+    var savedPosition = parseInt(localStorage.getItem("menuScrollPosition")) || 0;
+
+    if (savedPosition) {
+      // 有位置缓存时
+      $menu.stop().scrollTop(savedPosition);
+    } else {
+      // 无位置缓存时
+      const $element = $('.menu-scroll [data-id="' + cur + '"]');
+
+      // 滚动到该元素（尽量居中）
+      if ($element.length) {
+        const container = $(".menu-scroll");
+        const containerHeight = container.height();
+        const elementHeight = $element.outerHeight();
+        const elementOffset = $element.offset().top - container.offset().top;
+        const scrollPosition = elementOffset - containerHeight / 2 + elementHeight / 2;
+
+        container.scrollTop(scrollPosition);
+      }
+    }
+  }
+
+  // 页面之间操作回到滚动位置
+  var $pageScroll = $(".page-scroll-position");
+  if ($pageScroll.length) {
+    $pageScroll.on("click", "a", function (e) {
+      localStorage.setItem("pageScrollPosition", $(window).scrollTop());
+    });
+
+    var savePagePosition = parseInt(localStorage.getItem("pageScrollPosition")) || 0;
+    if (savePagePosition) {
+      setTimeout(function () {
+        $(window).scrollTop(savePagePosition);
+        localStorage.removeItem("pageScrollPosition");
+      }, 100);
+    }
+  }
+
+  // 单图 file image：本地预览、回显、清除，随表单提交（选图只做视觉反馈，不显示「已更新」完成态文案）
+  $(document).on("change", ".file-crop-pref", function () {
+    var $el = $(this);
+    var on = $el.prop("checked") ? 1 : 0;
+    var scope = $el.attr("data-crop-scope") || ($el.closest(".file-upload").length ? "gallery" : "thumb");
+    var token = $("#dou-post-form input[name=token]").val() || "";
+    $.ajax({
+      type: "POST",
+      url: route("admin.file.cropPref"),
+      data: { crop: on, scope: scope, token: token },
+      dataType: "json",
+    });
+  });
+
+  // 单图控件：根标记 data-dou-file-image，由 douFileImage.init() 扫描调度。
+  // 弹窗 / AJAX 局部刷新 / 元数据槽位动态插入后可再次调用 init(root)，
+  // data-file-image-ready 标记保证同一容器只绑定一次。
+  window.douFileImage = {
+    init: function (root) {
+      var scope = root || document;
+      var nodes = [];
+      if (scope.nodeType === 1 && scope.hasAttribute("data-dou-file-image")) {
+        nodes.push(scope);
+      }
+      var found = scope.querySelectorAll ? scope.querySelectorAll("[data-dou-file-image]") : [];
+      for (var i = 0; i < found.length; i++) {
+        nodes.push(found[i]);
+      }
+      for (var n = 0; n < nodes.length; n++) {
+        if (nodes[n].getAttribute("data-file-image-ready") === "1") {
+          continue;
+        }
+        nodes[n].setAttribute("data-file-image-ready", "1");
+        initFileImage(nodes[n]);
+      }
+    },
+  };
+
+  function initFileImage(el) {
+    var box = $(el);
+    var fileInput = box.find('input[type="file"]');
+    var preview = box.find(".file-image-preview");
+    var clearBtn = box.find(".file-action-remove");
+    var cropBtn = box.find(".file-action-crop");
+    var initialSrc = box.data("initial-src") || "";
+    var initialNumber = box.data("initial-number") || "";
+    var hasLocalFile = false;
+    var numberInput = box.find(".file-number");
+    var deferDelete = String(box.data("defer-delete")) === "1";
+    var draftUploadUrl = String(box.data("draft-upload-url") || "");
+    var draftReleaseUrl = String(box.data("draft-release-url") || "");
+    var draftModule = String(box.data("draft-module") || "");
+    var draftToken = String(box.data("draft-token") || "");
+    var draftLang = String(box.data("draft-lang") || "");
+    var draftMode = draftUploadUrl !== "";
+    var $draftModal = box.closest("[data-dou-modal-dynamic]");
+    var pendingDraftNumber = "";
+    var draftUploadSeq = 0;
+
+    // 已保存图才显示蒙板「裁剪」：有附件号走服务端原路径覆盖；
+    // data-local-crop 场景（站点设置等无附件号的字段）裁剪产物回写本地 file input 随表单提交
+    function refreshCropAction() {
+      var src = String(initialSrc || "");
+      var canEdit = window.douCrop && window.douCrop.editableExt(src);
+      // 草稿模式允许对“继承默认图”直接裁剪并上传为译文
+      var show = canEdit && !hasLocalFile && (!!initialNumber || !!box.data("local-crop") || (draftMode && !!src));
+      box.toggleClass("file-image-croppable", show);
+    }
+
+    // 高度固定 88px，只按图片宽高比改 stage 宽度（jQuery 1.10 不能写 CSS 变量）
+    function setStageWidth(px) {
+      var width = Math.max(100, parseInt(px, 10) || 100) + "px";
+      var stageEl = box.find(".file-image-stage")[0];
+      if (stageEl) {
+        stageEl.style.width = width;
+      }
+    }
+
+    function syncStageWidth() {
+      var img = preview[0];
+      var height = 88;
+
+      if (!box.hasClass("file-image-filled") || !img || !preview.attr("src")) {
+        setStageWidth(100);
+        return;
+      }
+
+      var w = img.naturalWidth;
+      var h = img.naturalHeight;
+      if (w > 0 && h > 0) {
+        setStageWidth(Math.round((height * w) / h));
+      } else {
+        setStageWidth(100);
+      }
+    }
+
+    function syncStageWidthWhenReady() {
+      var img = preview[0];
+      if (!img || !preview.attr("src")) {
+        syncStageWidth();
+        return;
+      }
+
+      if (img.decode) {
+        img.decode().then(function () {
+          syncStageWidth();
+        }).catch(function () {
+          syncStageWidth();
+        });
+        return;
+      }
+
+      if (img.complete) {
+        window.setTimeout(function () {
+          syncStageWidth();
+        }, 0);
+        return;
+      }
+
+      preview.one("load.fileImageStage", function () {
+        syncStageWidth();
+      }).one("error.fileImageStage", function () {
+        setStageWidth(100);
+      });
+    }
+
+    function showPreview(src) {
+      preview.off("load.fileImageStage error.fileImageStage");
+      box.addClass("file-image-filled").removeClass("file-image-no-reader");
+      preview.attr("src", src).show();
+      syncStageWidthWhenReady();
+    }
+
+    function showEmpty() {
+      preview.off("load.fileImageStage");
+      preview.attr("src", "").hide();
+      box.removeClass("file-image-filled file-image-no-reader file-image-croppable");
+      setStageWidth(100);
+    }
+
+    function restoreInitial() {
+      hasLocalFile = false;
+      box.find(".file-delete-flag").val("0");
+      if (initialSrc) {
+        showPreview(initialSrc);
+      } else {
+        showEmpty();
+      }
+      if (numberInput.length) {
+        numberInput.val(initialNumber);
+      }
+      refreshCropAction();
+    }
+
+    function previewFile(file) {
+      if (window.FileReader) {
+        var reader = new FileReader();
+        reader.onload = function (event) {
+          showPreview(event.target.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        box.addClass("file-image-filled file-image-no-reader");
+      }
+    }
+
+    function applyLocalFile(file) {
+      hasLocalFile = true;
+      box.find(".file-delete-flag").val("0");
+      if (numberInput.length) {
+        numberInput.val("");
+      }
+      refreshCropAction();
+      previewFile(file);
+    }
+
+    function uploadMaxKb() {
+      var maxKb = parseInt(window.dou_upload_max_kb, 10);
+      return maxKb > 0 ? maxKb : 0;
+    }
+
+    function exceedsUploadMax(file) {
+      var maxKb = uploadMaxKb();
+      return maxKb > 0 && file && typeof file.size === "number" && file.size > maxKb * 1024;
+    }
+
+    // 前端粗筛：全局 min(PHP ini, upload_defaults)；per-module 上限仍由服务端 reserve() 兜底
+    function rejectOversize(file) {
+      if (!exceedsUploadMax(file)) {
+        return false;
+      }
+      if (window.dou && window.dou.toast) {
+        window.dou.toast.error((typeof lang === "function" ? lang("file_out_size", "上传文件超过") : "上传文件超过") + uploadMaxKb() + "KB");
+      }
+      fileInput.val("");
+      restoreInitial();
+      return true;
+    }
+
+    function syncDraftState(number, url, changed) {
+      if (!$draftModal.length) {
+        return;
+      }
+      $draftModal
+        .data("draft-number", number || "")
+        .data("draft-url", url || "")
+        .data("draft-file-changed", !!changed);
+    }
+
+    function releaseDraftNumber(number) {
+      if (!number || draftReleaseUrl === "") {
+        return;
+      }
+      $.ajax({
+        type: "POST",
+        url: draftReleaseUrl,
+        data: {
+          module: draftModule,
+          number: number,
+          token: draftToken,
+        },
+        dataType: "json",
+      });
+    }
+
+    function blobToFile(blob, name) {
+      var fileName = name || "crop.jpg";
+      if (!/\.[a-zA-Z0-9]+$/.test(fileName)) {
+        fileName += ".jpg";
+      }
+      try {
+        return new File([blob], fileName, { type: blob.type || "image/jpeg" });
+      } catch (e) {
+        blob.name = fileName;
+        return blob;
+      }
+    }
+
+    function uploadDraftFile(file) {
+      if (!file || rejectOversize(file)) {
+        return;
+      }
+
+      var seq = ++draftUploadSeq;
+      if ($draftModal.length) {
+        $draftModal.data("draft-uploading", true);
+      }
+      previewFile(file);
+      var formData = new FormData();
+      formData.append("file", file);
+      formData.append("module", draftModule);
+      formData.append("slug", String(box.data("draft-slug") || ""));
+      formData.append("token", draftToken);
+      formData.append("language_pack", draftLang);
+      box.addClass("file-image-uploading");
+
+      $.ajax({
+        type: "POST",
+        url: draftUploadUrl,
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: "json",
+        success: function (resp) {
+          box.removeClass("file-image-uploading");
+          if (seq !== draftUploadSeq) {
+            if (resp && resp.number) {
+              releaseDraftNumber(resp.number);
+            }
+            return;
+          }
+          if ($draftModal.length) {
+            $draftModal.data("draft-uploading", false);
+          }
+          if (!resp || !resp.ok || !resp.number) {
+            alert(resp && resp.message ? resp.message : "操作失败");
+            restoreInitial();
+            return;
+          }
+          if ($draftModal.length && $draftModal.data("draft-closed")) {
+            releaseDraftNumber(resp.number);
+            return;
+          }
+          if (pendingDraftNumber && pendingDraftNumber !== resp.number) {
+            releaseDraftNumber(pendingDraftNumber);
+          }
+          pendingDraftNumber = String(resp.number);
+          initialSrc = String(resp.url || "");
+          initialNumber = String(resp.number);
+          hasLocalFile = false;
+          box.data("initial-src", initialSrc).data("initial-number", initialNumber);
+          if (numberInput.length) {
+            numberInput.val(initialNumber);
+          }
+          showPreview(initialSrc);
+          flashPreview(box);
+          refreshCropAction();
+          syncDraftState(initialNumber, initialSrc, true);
+          if ($draftModal.length) {
+            $draftModal.data("draft-file-deleted", false);
+          }
+        },
+        error: function () {
+          box.removeClass("file-image-uploading");
+          if (seq !== draftUploadSeq) {
+            return;
+          }
+          if ($draftModal.length) {
+            $draftModal.data("draft-uploading", false);
+            if ($draftModal.data("draft-closed")) {
+              return;
+            }
+          }
+          restoreInitial();
+          alert("操作失败");
+        },
+      });
+    }
+
+    fileInput.on("change", function () {
+      var file = fileInput[0].files[0];
+      if (!file) {
+        return;
+      }
+      if (rejectOversize(file)) {
+        return;
+      }
+
+      var cropOn = box.find(".file-crop-pref").prop("checked");
+      if (draftMode) {
+        var canCropDraft = cropOn && window.douCrop && window.douCrop.editableFile && window.douCrop.editableFile(file);
+        if (canCropDraft) {
+          window.douCrop.editFile(file, box.data("crop-ratio"), function (blob) {
+            if (!blob) {
+              fileInput.val("");
+              return;
+            }
+            uploadDraftFile(blobToFile(blob, file.name));
+            fileInput.val("");
+          });
+          return;
+        }
+        uploadDraftFile(file);
+        fileInput.val("");
+        return;
+      }
+      var canCropFile = cropOn && window.douCrop && window.douCrop.editableFile && window.douCrop.editableFile(file);
+      if (canCropFile) {
+        window.douCrop.editFile(file, box.data("crop-ratio"), function (blob) {
+          if (!blob) {
+            fileInput.val("");
+            restoreInitial();
+            return;
+          }
+          if (rejectOversize(blob)) {
+            return;
+          }
+          if (!replaceInputFile(fileInput[0], blob, file.name)) {
+            fileInput.val("");
+            restoreInitial();
+            return;
+          }
+          applyLocalFile(fileInput[0].files[0] || file);
+          flashPreview(box);
+        });
+        return;
+      }
+
+      applyLocalFile(file);
+      flashPreview(box);
+    });
+
+    box.find(".file-action-upload, .file-action-replace").on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      fileInput.trigger("click");
+    });
+
+    cropBtn.on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (draftMode) {
+        var draftSrc = String(initialSrc || preview.attr("src") || "");
+        if (!draftSrc || !window.douCrop || typeof window.douCrop.edit !== "function") {
+          return;
+        }
+        window.douCrop.edit(draftSrc, box.data("crop-ratio"), function (blob) {
+          if (!blob) {
+            return;
+          }
+          var baseName = draftSrc.split("?")[0].split("/").pop() || "crop.jpg";
+          uploadDraftFile(blobToFile(blob, baseName));
+        });
+        return;
+      }
+      if (!initialNumber && box.data("local-crop")) {
+        // 无附件号的本地裁剪：取已存图 → douCrop 弹窗 → 产物写回 file input（提交时随表单上传）
+        var baseName = String(initialSrc).split("/").pop();
+        window.douCrop.edit(initialSrc, box.data("crop-ratio"), function (blob) {
+          if (!blob) {
+            return;
+          }
+          if (rejectOversize(blob)) {
+            return;
+          }
+          if (!replaceInputFile(fileInput[0], blob, baseName)) {
+            return;
+          }
+          applyLocalFile(fileInput[0].files[0]);
+          flashPreview(box);
+        });
+        return;
+      }
+      fileCrop(initialNumber, initialSrc, box.data("crop-ratio"), function (url) {
+        if (!url) {
+          return;
+        }
+        initialSrc = url;
+        box.data("initial-src", url);
+        showPreview(url);
+        flashUpdated(box);
+      });
+    });
+
+    clearBtn.on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      fileInput.val("");
+
+      if (draftMode) {
+        draftUploadSeq++;
+        if ($draftModal.length) {
+          $draftModal.data("draft-uploading", false);
+        }
+        if (pendingDraftNumber) {
+          releaseDraftNumber(pendingDraftNumber);
+          pendingDraftNumber = "";
+        }
+        initialSrc = "";
+        initialNumber = "";
+        hasLocalFile = false;
+        box.data("initial-src", "").data("initial-number", "");
+        if (numberInput.length) {
+          numberInput.val("");
+        }
+        showEmpty();
+        refreshCropAction();
+        syncDraftState("", "", true);
+        if ($draftModal.length) {
+          $draftModal.data("draft-file-deleted", true);
+        }
+        return;
+      }
+
+      if (hasLocalFile) {
+        restoreInitial();
+        return;
+      }
+
+      if (initialNumber) {
+        if (deferDelete) {
+          initialSrc = "";
+          initialNumber = "";
+          box.data("initial-src", "").data("initial-number", "");
+          if (numberInput.length) {
+            numberInput.val("");
+          }
+          showEmpty();
+          refreshCropAction();
+          return;
+        }
+
+        // 只标记待删：真正删除与字段清空由业务层在主表单保存时处理
+        box.find(".file-delete-flag").val("1");
+        initialSrc = "";
+        initialNumber = "";
+        box.data("initial-src", "").data("initial-number", "");
+        if (numberInput.length) {
+          numberInput.val("");
+        }
+        showEmpty();
+        refreshCropAction();
+        return;
+      }
+
+      showEmpty();
+      refreshCropAction();
+    });
+
+    if (draftMode && $draftModal.length) {
+      $draftModal.one("douModalClose.draftFile", function () {
+        $draftModal.data("draft-closed", true);
+        if (!$draftModal.data("draft-submitted") && pendingDraftNumber) {
+          releaseDraftNumber(pendingDraftNumber);
+          pendingDraftNumber = "";
+        }
+      });
+    }
+
+    if (box.hasClass("file-image-filled")) {
+      syncStageWidthWhenReady();
+    }
+
+    refreshCropAction();
+  }
+
+  // 页面加载：为文档内已存在的单图控件绑定一次
+  window.douFileImage.init(document);
+
+  $(document).on("click", ".file-upload .file-list .file-action-crop", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var $li = $(this).closest(".file-item");
+    var img = $li.find("img")[0];
+    var number = $li.attr("data-number") || "";
+    var ratio = $li.closest(".file-upload").attr("data-crop-ratio") || "";
+    if (!number || !img) {
+      return;
+    }
+    fileCrop(number, img.src, ratio, function (url) {
+      if (url) {
+        img.src = url;
+        flashUpdated($(img).closest(".file-item"));
+      }
+    });
+  });
+
+  $(document).on("click", ".file-upload .file-list .file-action-replace", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var $li = $(this).closest(".file-item");
+    var img = $li.find("img")[0];
+    var number = $li.attr("data-number") || "";
+    var ratio = $li.closest(".file-upload").attr("data-crop-ratio") || "";
+    if (!number || !img) {
+      return;
+    }
+    fileReplace(number, img, ratio);
+  });
+
+  // 相册 / 附件行的删除按钮改由 [data-file-del] 在 document 上统一委托
+  // （js/file.uploader.js），此处不再单独绑定，避免与引擎重复发起删除请求。
+
+  // 弹出菜单
+  $("#switch-menu").click(function () {
+    if ($("#dou-sidebar").hasClass("open")) {
+      $("#dou-sidebar").removeClass("open");
+    } else {
+      $("#dou-sidebar").addClass("open");
+    }
+  });
+
+  // 文本复制
+  $(".copytext").on("click", function () {
+    const $el = $(this);
+    // 优先使用 data-text，如果没有则使用元素的文本内容
+    let text = $el.data("text") || $el.text().trim();
+    if (!text) return;
+
+    // 复制文本
+    const $temp = $("<textarea>");
+    $("body").append($temp);
+    $temp.val(text).select();
+    document.execCommand("copy");
+    $temp.remove();
+
+    // 移除已有的提示（防重复）
+    $el.find(".hint").remove();
+
+    // 创建新提示
+    const $hint = $('<i class="hint">' + lang('copy_success', '复制成功！') + '</i>');
+    $el.append($hint);
+
+    // 触发淡入（下一帧加 .show）
+    setTimeout(() => {
+      $hint.addClass("show");
+    }, 10); // 微小延迟确保 transition 生效
+
+    // 1秒后开始淡出，再过0.2秒彻底移除
+    setTimeout(() => {
+      $hint.removeClass("show");
+      setTimeout(() => {
+        $hint.remove();
+      }, 200); // 等待淡出动画完成
+    }, 1000);
+  });
+
+  // textarea 自动高度
+  $.fn.autoTextarea = function () {
+    this.each(function () {
+      var $ta = $(this);
+      var minRows = parseInt($ta.data("min"), 10);
+      var maxRows = parseInt($ta.data("max"), 10);
+      // 计算行高
+      var lineHeight = parseFloat($ta.css("line-height"));
+      if (isNaN(lineHeight)) {
+        var fontSize = parseFloat($ta.css("font-size"));
+        lineHeight = fontSize * 1.2;
+      }
+      // 边框和内边距补偿（针对 border-box）
+      var extra = 0;
+      if ($ta.css("box-sizing") === "border-box") {
+        extra = parseFloat($ta.css("border-top-width")) + parseFloat($ta.css("border-bottom-width")) + parseFloat($ta.css("padding-top")) + parseFloat($ta.css("padding-bottom"));
+      }
+      var minHeight = isNaN(minRows) ? null : minRows * lineHeight + extra;
+      var maxHeight = isNaN(maxRows) ? null : maxRows * lineHeight + extra;
+      // 设置样式限制
+      if (minHeight !== null) $ta.css("min-height", minHeight + "px");
+      if (maxHeight !== null) $ta.css("max-height", maxHeight + "px");
+      // 高度自适应函数
+      function adjust() {
+        $ta.css("height", "auto");
+        var height = $ta[0].scrollHeight;
+        if (maxHeight !== null && height > maxHeight) height = maxHeight;
+        if (minHeight !== null && height < minHeight) height = minHeight;
+        $ta.css("height", height + "px");
+      }
+      $ta.on("input", adjust);
+      adjust();
+    });
+    return this;
+  };
+
+  $(function () {
+    if ($(".auto-textarea").length > 0) {
+      $(".auto-textarea").autoTextarea();
+    }
+  });
+
+  // jQuery
+});
+
+/**
+ +----------------------------------------------------------
+ * alpine
+ +----------------------------------------------------------
+ */
+document.addEventListener("alpine:init", () => {
+  // 拼音生成组件（已有）
+  Alpine.data("slugApp", () => ({
+    autoSlug() {
+      // 1. 获取输入
+      const nameInput = document.querySelector('input[name="name"], input[name="title"]');
+      if (!nameInput || !nameInput.value) return;
+
+      const rawText = nameInput.value.trim();
+      if (!rawText) return;
+
+      // 2. 检查拼音库
+      if (!window.Pinyin || !window.Pinyin.isSupported()) {
+        alert(lang('pinyin_lib_missing', '拼音库未加载'));
+        return;
+      }
+
+      // 3. 判断是否包含中文
+      const hasChinese = /[\u4e00-\u9fa5]/.test(rawText);
+
+      // 4. 生成基础字符串
+      let base = rawText;
+      if (hasChinese) {
+        // 中文部分使用拼音库转换（已小写、连字符分隔）
+        base = window.Pinyin.convertToPinyin(rawText, "-", true);
+      }
+
+      // 5. 统一转换为 slug 格式
+      const slug = this.toSlug(base);
+
+      // 6. 填充
+      const slugInput = document.querySelector('input[name="slug"]');
+      if (slugInput) {
+        slugInput.value = slug;
+      }
+    },
+
+    // 将任意字符串转换为 slug 格式
+    toSlug(str) {
+      return str
+        .toLowerCase() // 转小写
+        .replace(/[^\w\u4e00-\u9fa5-]+/g, "-") // 非字母数字中文连字符替换为 -
+        .replace(/-+/g, "-") // 多个连续 - 合并为一个
+        .replace(/^-|-$/g, ""); // 去掉首尾 -
+    },
+  }));
+});
+
+
+/**
+ +----------------------------------------------------------
+ * 刷新验证码
+ +----------------------------------------------------------
+ */
+function refreshimage() {
+  var cap = document.getElementById("vcode");
+  // 如果 URL 已有 ?，则替换现有参数；否则添加 ?
+  if (cap.src.indexOf("?") > -1) {
+    cap.src = cap.src.replace(/\?.*$/, "?route=captcha&t=" + Date.now());
+  } else {
+    cap.src = cap.src + "?route=captcha&t=" + Date.now();
+  }
+}
+
+/**
+ +----------------------------------------------------------
+ * 无组件刷新局部内容
+ *
+ * 默认 POST（含 static_admin token，CsrfMiddleware 校验）；method 可选 'GET' / 'DELETE' /
+ * 'PUT' / 'PATCH'：GET 把 name=value 追加到 URL 不带 token；其它写动作仍走 POST 但通过
+ * data 内 _method 字段做 HTTP 动词伪装（与 Request::method() spoofing 链路一致），保留
+ * token 由 CsrfMiddleware 在 POST 阶段校验。
+ +----------------------------------------------------------
+ */
+function dou_callback(page, name, value, target, method) {
+  method = (method || "POST").toString().toUpperCase();
+  var token = $("#dou-post-form input[name=token]").val() || "";
+
+  if (method === "GET") {
+    var sep = page.indexOf("?") >= 0 ? "&" : "?";
+    page = page + sep + encodeURIComponent(name) + "=" + encodeURIComponent(value);
+    $.ajax({
+      type: "GET",
+      url: page,
+      dataType: "html",
+      success: function (html) {
+        $("#" + target).html(html);
+      },
+    });
+    return;
+  }
+
+  var data = encodeURIComponent(name) + "=" + encodeURIComponent(value) + "&token=" + encodeURIComponent(token);
+  if (method !== "POST") {
+    data += "&_method=" + encodeURIComponent(method);
+  }
+  $.ajax({
+    type: "POST",
+    url: page,
+    data: data,
+    dataType: "html",
+    success: function (html) {
+      $("#" + target).html(html);
+    },
+  });
+}
+
+/**
+ +----------------------------------------------------------
+ * 表单全选
+ +----------------------------------------------------------
+ */
+function selectcheckbox(form) {
+  for (var i = 0; i < form.elements.length; i++) {
+    var e = form.elements[i];
+    if (e.name != "chkall" && e.disabled != true) e.checked = form.chkall.checked;
+  }
+}
+
+/**
+ +----------------------------------------------------------
+ * 弹出窗口
+ +----------------------------------------------------------
+ */
+function douFrame(name, frame, url) {
+  $.ajax({
+    type: "POST",
+    url: url,
+    data: { name: name, frame: frame },
+    dataType: "html",
+    success: function (html) {
+      $(document.body).append(html);
+    },
+  });
+}
+
+/**
+ * 点击切换显示和隐藏
+ */
+function showHide(target) {
+  $("#" + target).toggle();
+}
+
+/**
+ +----------------------------------------------------------
+ * 添加文本
+ +----------------------------------------------------------
+ */
+function douInput(target, text) {
+  document.getElementById(target).value = text;
+}
+
+/**
+ +----------------------------------------------------------
+ * 清空对象内HTML
+ +----------------------------------------------------------
+ */
+function douRemove(target) {
+  var obj = document.getElementById(target);
+  obj.parentNode.removeChild(obj);
+}
+
+/**
+ +----------------------------------------------------------
+ * 无刷新自定义导航名称
+ +----------------------------------------------------------
+ */
+function change(id, choose) {
+  document.getElementById(id).value = choose.options[choose.selectedIndex].title;
+}
+
+/**
+ +----------------------------------------------------------
+ * 给指定表单赋值
+ +----------------------------------------------------------
+ */
+function changeInput(targer, value) {
+  $("#" + targer).attr("value", value);
+}
+
+/**
+ +----------------------------------------------------------
+ * RESTful 删除：经共享隐藏表单以 POST + _method=DELETE 提交到资源成员 URL
+ *
+ * 浏览器原生 <a>/表单只能发 GET/POST；资源 destroy 动作为 DELETE 方法，故删除入口统一走
+ * #dou-delete-form（footer.tpl 单点渲染，已带 static_admin token）：设置 action 后 submit，
+ * 由 Request::method() 的方法伪装识别为 DELETE 命中 destroy 路由。confirmMsg 非空时先确认。
+ +----------------------------------------------------------
+ */
+function douDelete(url, confirmMsg) {
+  if (confirmMsg && !window.confirm(confirmMsg)) {
+    return false;
+  }
+  var form = document.getElementById("dou-delete-form");
+  if (!form) {
+    return false;
+  }
+  form.setAttribute("action", url);
+  form.submit();
+  return false;
+}
+
+/**
+ +----------------------------------------------------------
+ * 状态变更：经共享隐藏表单以 POST 提交到目标 URL
+ *
+ * 浏览器原生 <a> 只能发 GET；启用 / 禁用 / 标记已读 / 推送等非删除型写动作统一走
+ * #dou-post-form（footer.tpl 单点渲染，已带 static_admin token）：设置 action 后 submit，
+ * 由 CsrfMiddleware 校验 token 后命中目标 POST 路由。confirmMsg 非空时先确认。
+ +----------------------------------------------------------
+ */
+function douPost(url, confirmMsg) {
+  if (confirmMsg && !window.confirm(confirmMsg)) {
+    return false;
+  }
+  var form = document.getElementById("dou-post-form");
+  if (!form) {
+    return false;
+  }
+  form.setAttribute("action", url);
+  form.submit();
+  return false;
+}
+
+/**
+ +----------------------------------------------------------
+ * 确认弹窗（dou-modal）：替代原生 window.confirm
+ *
+ * message 以纯文本渲染（不解析 HTML），点「确定」后关闭弹窗并执行 onOk。
+ * 声明式接入：动作链接声明 data-modal-confirm="文案"（可选 data-modal-title="标题"），
+ * 由 .js-post 委托自动调用；data-confirm 仍保持原生 confirm 兼容。
+ +----------------------------------------------------------
+ */
+function douConfirm(message, onOk, title) {
+  var cancelText = typeof lang === "function" ? lang("cancel") : "Cancel";
+  var okText = typeof lang === "function" ? lang("confirm") : "OK";
+  var $modal = douModal.open({
+    title: title || "",
+    placement: "center",
+    buttons: [
+      {
+        text: okText,
+        className: "btn",
+        onClick: function ($m, done) {
+          done();
+          if (typeof onOk === "function") {
+            onOk();
+          }
+        },
+      },
+      {
+        text: cancelText,
+        className: "btn-secondary",
+        onClick: function ($m, done) {
+          done();
+        },
+      },
+    ],
+  });
+
+  $modal
+    .find(".dou-modal-body")
+    .html('<div class="dou-modal-message" style="white-space:pre-line"></div>')
+    .find(".dou-modal-message")
+    .text(message);
+
+  return $modal;
+}
+
+/**
+ * 状态药丸按钮默认值补全（幂等）。
+ *
+ * 仅作用于 .status-pill，避免影响纯文字形态的 js-toggle：
+ * - 未配置 data-text-on/off 时按「显示/隐藏」填充；
+ * - 缺少内层 js-toggle-state/js-toggle-action 时，用现有文字重建双内层结构
+ *   （当前态文字优先取元素既有文字，动作文字取相反态文案）。
+ *
+ * @param {jQuery} [$el] 只补全该元素；省略时补全页面上所有 .status-pill
+ */
+function initToggleDefaults($el) {
+  var $items;
+  if ($el && $el.length) {
+    $items = $el.hasClass("status-pill") ? $el : $el.find(".status-pill");
+  } else {
+    $items = $(".status-pill");
+  }
+
+  $items.each(function () {
+    var $item = $(this);
+    var state = $item.data("state") === "off" ? "off" : "on";
+
+    if (!$item.data("text-on")) {
+      $item.data("text-on", lang("status_1", "显示"));
+    }
+    if (!$item.data("text-off")) {
+      $item.data("text-off", lang("status_0", "隐藏"));
+    }
+
+    if ($item.find(".js-toggle-state").length) {
+      return;
+    }
+
+    var current = $item.text().trim() || $item.data("text-" + state);
+    var action = $item.data(state === "on" ? "text-off" : "text-on");
+    $item
+      .empty()
+      .append($("<span></span>").addClass("js-toggle-state").text(current))
+      .append($("<span></span>").addClass("js-toggle-action").text(action));
+  });
+}
+
+/**
+ +----------------------------------------------------------
+ * 行内布尔切换（js-toggle 协议，协议声明见文件头部 $(function) 内注释）
+ *
+ * AJAX POST 提交 data-url（携带 data-post 业务参数），成功后以响应中的
+ * data.value 为准翻转：本元素文字/类、同一行内 .js-toggle-view 徽章、
+ * 行弱化类（tr 的 data-off-row-class）。CSRF 由 dou.csrf.js 注入请求头。
+ +----------------------------------------------------------
+ */
+function douToggle($el) {
+  initToggleDefaults($el);
+
+  var url = $el.data("url") || $el.attr("href");
+  if (!url) {
+    return false;
+  }
+  var state = $el.data("state") === "off" ? "off" : "on";
+  var target = state === "on" ? "off" : "on";
+  var confirmMsg = $el.data("confirm-" + target);
+  if (confirmMsg && !window.confirm(confirmMsg)) {
+    return false;
+  }
+
+  $.ajax({
+    url: url,
+    type: "POST",
+    data: $el.data("post") || {},
+    dataType: "json",
+    success: function (resp) {
+      if (resp && resp.code === "OK" && resp.data && typeof resp.data.value !== "undefined") {
+        douToggleApply($el, resp.data.value ? "on" : "off");
+        dou.toast.success(resp.message);
+      } else {
+        dou.toast.error((resp && resp.message) || lang("ai_toggle_failed", "操作失败"));
+      }
+    },
+    error: function (xhr) {
+      var resp = xhr.responseJSON;
+      dou.toast.error((resp && resp.message) || lang("ai_toggle_failed", "操作失败"));
+    }
+  });
+  return false;
+}
+
+/**
+ * 把 on/off 状态应用到切换元素、同行的展示徽章与行弱化类。
+ */
+function douToggleApply($el, state) {
+  var $scope = $el.closest("tr");
+  if (!$scope.length) {
+    var scopeSelector = $el.data("scope");
+    $scope = scopeSelector ? $el.closest(scopeSelector) : $el.parent();
+  }
+
+  applyToggleState($el, state);
+
+  $scope.find(".js-toggle-view").each(function () {
+    applyToggleState($(this), state);
+  });
+
+  var offRowClass = $scope.data("off-row-class");
+  if (offRowClass) {
+    $scope.toggleClass(offRowClass, state === "off");
+  }
+}
+
+/**
+ * 单元素按状态翻转文字与类。
+ *
+ * 双内层形态（<span class="js-toggle-state">当前态</span><span class="js-toggle-action">动作</span>，
+ * CSS 控制 hover 显隐）时更新两者文字；单文字形态保持整体 text()。
+ * remove 仅作用于已声明的两侧类，避免误清其它 class。
+ */
+function applyToggleState($el, state) {
+  // 同步 DOM 属性，供 .status-pill[data-state] 样式选择器即时换色（.data() 只写内存缓存）
+  $el.attr("data-state", state).data("state", state);
+
+  var text = $el.data("text-" + state);
+  var opposite = $el.data(state === "on" ? "text-off" : "text-on");
+  var $stateText = $el.find(".js-toggle-state");
+  var $actionText = $el.find(".js-toggle-action");
+  if ($stateText.length) {
+    if (text) {
+      $stateText.text(text);
+    }
+    if (opposite) {
+      $actionText.text(opposite);
+    }
+  } else if (text) {
+    $el.text(text);
+  }
+
+  var onClass = $el.data("on-class");
+  var offClass = $el.data("off-class");
+  if (onClass || offClass) {
+    $el.removeClass(onClass).removeClass(offClass);
+    var nextClass = state === "on" ? onClass : offClass;
+    if (nextClass) {
+      $el.addClass(nextClass);
+    }
+  }
+}
+
+/**
+ +----------------------------------------------------------
+ * 移动分类至
+ +----------------------------------------------------------
+ */
+function douAction() {
+  var frm = document.forms["action"];
+  frm.elements["new_cat_id"].style.display = frm.elements["action"].value == "category_move" ? "" : "none";
+}
+
+/**
+ +----------------------------------------------------------
+ * 文件上传引擎已迁移到 js/file.uploader.js
+ +----------------------------------------------------------
+ * 旧的上传全局函数与 fileBox 别名已删除，不做兼容包装；
+ * 行为改由容器上的 data-file-* 驱动，入口为 window.douFileUploader
+ * （init / pick / destroy / remove / abort）。
+ */
+
+/**
+ +----------------------------------------------------------
+ * blob 转带扩展名的 File（裁剪产物入 FormData 前先命名）
+ +----------------------------------------------------------
+ */
+function blobToNamedFile(blob, origName) {
+  if (!blob || typeof File === "undefined") {
+    return null;
+  }
+  var type = blob.type ? blob.type : "image/jpeg";
+  var ext = ".jpg";
+  if (type === "image/png") {
+    ext = ".png";
+  } else if (type === "image/webp") {
+    ext = ".webp";
+  }
+  var base = String(origName || "image").replace(/\.[^.]+$/, "");
+  try {
+    return new File([blob], base + ext, { type: type, lastModified: Date.now() });
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ +----------------------------------------------------------
+ * 把裁剪 blob 写回 file input（随表单提交裁剪后的图）
+ +----------------------------------------------------------
+ */
+function replaceInputFile(input, blob, origName) {
+  if (typeof DataTransfer === "undefined" || typeof File === "undefined" || !input) {
+    return false;
+  }
+  var type = blob && blob.type ? blob.type : "image/jpeg";
+  var ext = ".jpg";
+  if (type === "image/png") {
+    ext = ".png";
+  } else if (type === "image/webp") {
+    ext = ".webp";
+  }
+  var base = String(origName || "image").replace(/\.[^.]+$/, "");
+  try {
+    var file = new File([blob], base + ext, { type: type, lastModified: Date.now() });
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    return !!(input.files && input.files.length);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ +----------------------------------------------------------
+ * 相册项：按附件号覆盖原图（裁剪 / 换图共用）
+ +----------------------------------------------------------
+ */
+function fileSaveCrop(number, blobOrFile, done) {
+  var form = new FormData();
+  var fname = blobOrFile && blobOrFile.name ? blobOrFile.name : "";
+  if (!fname) {
+    var mime = blobOrFile && blobOrFile.type ? blobOrFile.type : "";
+    var ext = "jpg";
+    if (mime === "image/png") {
+      ext = "png";
+    } else if (mime === "image/webp") {
+      ext = "webp";
+    }
+    fname = "crop." + ext;
+  }
+  form.append("number", number);
+  form.append("file", blobOrFile, fname);
+  form.append("token", $("#dou-post-form input[name=token]").val() || "");
+  $.ajax({
+    type: "POST",
+    url: route("admin.file.crop"),
+    data: form,
+    processData: false,
+    contentType: false,
+    dataType: "json",
+    success: function (res) {
+      if (res && res.url) {
+        done && done(res.url);
+      } else {
+        alert((res && res.error) || lang("crop_save_failed", "保存失败"));
+        done && done("");
+      }
+    },
+    error: function () {
+      alert(lang("crop_save_failed", "保存失败"));
+      done && done("");
+    },
+  });
+}
+
+/**
+ +----------------------------------------------------------
+ * URL / 文件名里的图片扩展名
+ +----------------------------------------------------------
+ */
+function srcFileExt(src) {
+  var m = String(src || "").split("?")[0].match(/\.([a-z0-9]+)$/i);
+  return m ? m[1].toLowerCase() : "";
+}
+
+function extMime(ext) {
+  ext = String(ext || "").toLowerCase();
+  if (ext === "png") {
+    return "image/png";
+  }
+  if (ext === "webp") {
+    return "image/webp";
+  }
+  if (ext === "jpg" || ext === "jpeg") {
+    return "image/jpeg";
+  }
+  return "";
+}
+
+function sameImageExt(a, b) {
+  a = String(a || "").toLowerCase();
+  b = String(b || "").toLowerCase();
+  if (a === "jpeg") {
+    a = "jpg";
+  }
+  if (b === "jpeg") {
+    b = "jpg";
+  }
+  return a !== "" && a === b;
+}
+
+/**
+ +----------------------------------------------------------
+ * 把本地 File 转成原附件扩展名对应的 blob（类型相同则原样返回）
+ +----------------------------------------------------------
+ */
+function fileToBlobAsExt(file, ext, done) {
+  var mime = extMime(ext);
+  if (!file || !mime) {
+    done(null);
+    return;
+  }
+  var fileExtName = srcFileExt(file.name || "");
+  if (sameImageExt(fileExtName, ext) || (file.type && file.type === mime)) {
+    done(file);
+    return;
+  }
+  if (typeof URL === "undefined" || !URL.createObjectURL) {
+    done(null);
+    return;
+  }
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function () {
+    var canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    var ctx = canvas.getContext("2d");
+    if (mime === "image/jpeg") {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    if (!canvas.toBlob) {
+      done(null);
+      return;
+    }
+    canvas.toBlob(
+      function (blob) {
+        done(blob || null);
+      },
+      mime,
+      mime === "image/jpeg" ? 0.85 : undefined
+    );
+  };
+  img.onerror = function () {
+    URL.revokeObjectURL(url);
+    done(null);
+  };
+  img.src = url;
+}
+
+/**
+ +----------------------------------------------------------
+ * 预览已刷新：短暂释放悬停蒙板 + 预览淡入
+ * 仅表示本次选择/裁剪已反映到预览，不代表服务端已保存；
+ * 解决新图被悬停蒙板挡住、用户无法确认是否换了图的问题。
+ * $host：单图 .file-image 或相册 .file-item 的 jQuery 对象
+ +----------------------------------------------------------
+ */
+function flashPreview($host) {
+  if (!$host || !$host.length) {
+    return;
+  }
+  var isItem = $host.hasClass("file-item");
+  var flashCls = isItem ? "file-item-flashing" : "file-image-flashing";
+
+  $host.addClass(flashCls);
+
+  // 重启预览淡入（连续选择时也重新淡入一次）
+  var preview = $host.find(".file-image-preview")[0];
+  if (preview) {
+    preview.style.animation = "none";
+    void preview.offsetWidth; // 强制回流
+    preview.style.animation = "";
+  }
+
+  clearTimeout($host.data("flashTimer"));
+  $host.data(
+    "flashTimer",
+    setTimeout(function () {
+      $host.removeClass(flashCls);
+    }, 1200)
+  );
+}
+
+/**
+ +----------------------------------------------------------
+ * 服务端已写入（即时上传/原路径覆盖）：预览反馈 + 闪「已更新」徽标
+ * $host：单图 .file-image 或相册 .file-item 的 jQuery 对象
+ +----------------------------------------------------------
+ */
+function flashUpdated($host) {
+  if (!$host || !$host.length) {
+    return;
+  }
+  var isItem = $host.hasClass("file-item");
+  var flashSel = isItem ? ".file-item-flash" : ".file-image-flash";
+  var badgeSel = isItem ? ".file-item-flash-badge" : ".file-image-flash-badge";
+
+  flashPreview($host);
+
+  if (!$host.find(flashSel).length) {
+    $host.append(
+      '<div class="' + (isItem ? "file-item-flash" : "file-image-flash") + '">' +
+      '<span class="' + (isItem ? "file-item-flash-badge" : "file-image-flash-badge") + '">' +
+      '<i class="bi-check-lg"></i>' + lang("image_updated", "Updated") +
+      "</span></div>"
+    );
+  }
+
+  // 重启徽标动画（连续操作时也重新闪一次）
+  var badge = $host.find(badgeSel);
+  if (badge.length) {
+    badge[0].style.animation = "none";
+    void badge[0].offsetWidth; // 强制回流
+    badge[0].style.animation = "";
+  }
+}
+
+/**
+ +----------------------------------------------------------
+ * 相册项换图：选本地文件 → 可选裁剪 → admin.file.crop 原路径覆盖
+ +----------------------------------------------------------
+ */
+function fileReplace(number, imgEl, ratio) {
+  var input = document.getElementById("fileReplaceField");
+  if (!input) {
+    input = document.createElement("input");
+    input.type = "file";
+    input.id = "fileReplaceField";
+    input.accept = "image/*";
+    input.style.display = "none";
+    document.body.appendChild(input);
+  }
+  input.value = "";
+  $(input)
+    .off("change.fileReplace")
+    .on("change.fileReplace", function () {
+      var file = input.files && input.files[0];
+      input.value = "";
+      if (!file || !imgEl) {
+        return;
+      }
+      var origExt = srcFileExt(imgEl.src);
+      var cropOn = $(imgEl).closest(".file-upload").find(".file-crop-pref").prop("checked");
+      var canCropFile = cropOn && window.douCrop && window.douCrop.editableFile && window.douCrop.editableFile(file);
+      if (canCropFile) {
+        window.douCrop.editFile(
+          file,
+          ratio || "",
+          function (blob) {
+            if (!blob) {
+              return;
+            }
+            fileSaveCrop(number, blob, function (url) {
+              if (url) {
+                imgEl.src = url;
+                flashUpdated($(imgEl).closest(".file-item"));
+              }
+            });
+          },
+          srcFileExt(file.name) || origExt
+        );
+        return;
+      }
+      fileSaveCrop(number, file, function (url) {
+        if (url) {
+          imgEl.src = url;
+          flashUpdated($(imgEl).closest(".file-item"));
+        }
+      });
+    });
+  input.click();
+}
+
+/**
+ +----------------------------------------------------------
+ * 文件.图片编辑（上传后裁剪）：弹窗裁剪已上传图片 → admin.file.crop 原路径替换
+ * number  dou_file 附件号
+ * src     原图 URL（弹窗加载源，扩展名决定导出格式）
+ * ratio   初始裁剪比例（可空 = 自由）
+ * done    回调 done(url)：成功回传带版本参数的新 URL，取消/失败回传空
+ +----------------------------------------------------------
+ */
+function fileCrop(number, src, ratio, done) {
+  if (!window.douCrop) {
+    done && done("");
+    return;
+  }
+  window.douCrop.edit(src, ratio || "", function (blob) {
+    if (!blob) {
+      done && done("");
+      return;
+    }
+    fileSaveCrop(number, blob, done);
+  });
+}
+
+/**
+ +----------------------------------------------------------
+ * 查询表单过滤空值
+ +----------------------------------------------------------
+ */
+function hideEmpty(form) {
+  // 收集非空参数
+  const params = [];
+
+  form.querySelectorAll("input[name], select[name]").forEach((el) => {
+    const elementName = el.name;
+    const value = el.value;
+    let isEmpty = false;
+
+    if (el.type === "text") {
+      isEmpty = !value || value.trim() === "";
+    } else if (el.name === "status") {
+      isEmpty = !value || value === "";
+    } else if (el.tagName === "SELECT") {
+      isEmpty = !value || value === "" || value == 0;
+    } else {
+      isEmpty = !value;
+    }
+
+    if (!isEmpty) {
+      // 对参数进行编码（route 为 module/action，保留路径中的 /，避免 user%2Fcontact）
+      const encodedName = encodeURIComponent(el.name);
+      let encodedValue;
+      if (el.name === "route") {
+        encodedValue = el.value
+          .split("/")
+          .map(function (segment) {
+            return encodeURIComponent(segment);
+          })
+          .join("/");
+      } else {
+        encodedValue = encodeURIComponent(el.value);
+      }
+      params.push(`${encodedName}=${encodedValue}`);
+    }
+  });
+
+  // 构建URL
+  // 注意：当表单内存在 name="action" 的子控件（如本页 manager/log 的「操作类型」筛选），
+  // form.action 会被命名控件遮蔽返回 HTMLSelectElement，拼出 [object HTMLSelectElement]。
+  // 用 getAttribute("action") 取真实的 action 属性字符串，避开命名遮蔽。
+  let url = form.getAttribute("action") || form.action;
+  if (params.length > 0) {
+    // action 可能是伪静态基址（无 ?）或 admin_rewrite 关闭时的 index.php?route= 形态（已含 ?）。
+    url += (url.indexOf("?") === -1 ? "?" : "&") + params.join("&");
+  }
+
+  // 手动跳转
+  window.location.href = url;
+
+  // 阻止表单默认提交行为
+  return false;
+}
+
+/**
+ +----------------------------------------------------------
+ * 编辑器插入文本
+ +----------------------------------------------------------
+ */
+function editorInsert(target, html) {
+  UM.getEditor(target).execCommand("insertHtml", html);
+}
+
+/**
+ +----------------------------------------------------------
+ * 产品型号
+ +----------------------------------------------------------
+ */
+function modelBox(mode, id, action_id = "") {
+  var target = $("#model-list");
+  var action_id = action_id ? action_id : $("#modelId").val();
+
+  if (!id) {
+    alert(lang('product_model_add_first', '请先添加好商品，重新编辑时才可以添加款式'));
+  }
+
+  $.ajax({
+    type: "POST",
+    url: route("admin.product.model"),
+    data: { mode: mode, id: id, action_id: action_id },
+    dataType: "html",
+    success: function (html) {
+      target.html(html);
+    },
+    error: function () {
+      alert(lang('ajax_error', '错误'));
+    },
+  });
+}
+
+/**
+ +----------------------------------------------------------
+ * 添加文本
+ +----------------------------------------------------------
+ */
+function boxClass(target_a, text_a, target_b, text_b) {
+  document.getElementById(target_a).value = text_a;
+  document.getElementById(target_b).value = text_b;
+}
+
+/**
+ +----------------------------------------------------------
+ * 大文件上传
+ +----------------------------------------------------------
+ */
+function fileBig(type, target, module, item_id, editor = "ueditor", draft_token = "") {
+  // 初始化
+  var itemId = "#" + target + "BigFile";
+
+  var fileId = document.querySelector(itemId + " .field");
+  var percentId = $(itemId + " .percent");
+  var progressId = $(itemId + " .progress");
+  var linkId = $(itemId + " .link");
+  var sqlLinkUrl = $(itemId + " .link").val();
+
+  //---------------------------
+  var file = null;
+  var fileMd5Value = "";
+  // 分片总数
+  var total_blob_num;
+  // 进程队列
+  var courseQueue = [];
+  // 分片队列
+  var burstQueue = [];
+  // 进度队列
+  var progressQueue = [];
+
+  var courseTimer = 0;
+  var progressTimer = 0;
+
+  //如果文件大，md5值生成较慢  md5值生成后才能上传处理，自己优化下吧
+  browserMD5File(fileId.files[0].slice(0, 1000), function (err, md5) {
+    fileMd5Value = md5; //如果需要刷新后也能断点，可利用cookie记录，自行完善
+  });
+
+  // 验证文件格式
+  var check_ext = "";
+  $.ajax({
+    type: "POST",
+    url: route("admin.file.bigfile", {}, { query: { act: "ext" } }),
+    data: { check_filename: fileId.files[0]["name"], token: $("#dou-post-form input[name=token]").val() || "" },
+    dataType: "html",
+    async: false,
+    success: function (html) {
+      if (html) {
+        alert(html);
+      } else {
+        check_ext = true;
+      }
+    },
+  });
+
+  if (check_ext) {
+    // 执行上传操作
+    restartUpload();
+
+    var step = 1024 * 1024 * 1.8; // 分卷大小1.8M
+    file = fileId.files[0];
+    total_blob_num = Math.ceil(file.size / step);
+
+    var start = 0;
+    var end = start + step;
+    for (var blob_num = 1; blob_num <= total_blob_num; blob_num++) {
+      burstQueue.push({
+        id: blob_num,
+        start: start,
+        end: end,
+      });
+      start = end;
+      end = start + step;
+    }
+
+    // 启动上传队列
+    courseTimer = setInterval(sendFile, 10);
+    // 启动进程监控器
+    progressTimer = setInterval(progressChecker, 1000);
+
+    function restartUpload() {
+      clearInterval(courseTimer);
+      clearInterval(progressTimer);
+      burstQueue = [];
+      courseQueue = [];
+      progressQueue = [];
+
+      var progress = 0 + "%";
+      progressId.css("width", progress);
+      percentId.html(progress);
+    }
+
+    function progressChecker() {
+      var finishNum = progressQueue.length;
+      var progress = Math.min(100, (finishNum / total_blob_num) * 100).toFixed(0) + "%";
+      console.log("progress-----" + progress);
+      progressId.css("width", progress);
+      percentId.html(progress);
+      if (progressQueue.length === total_blob_num) {
+        clearInterval(progressTimer);
+        clearInterval(courseTimer);
+      }
+    }
+
+    // 发送文件
+    function sendFile() {
+      // 如果队列满负荷运载，则不再起队列
+      if (courseQueue.length >= 20) {
+        return;
+      }
+
+      // 如果分片已经被分配完了，终止定时器
+      if (burstQueue.length === 0) {
+        return;
+      }
+
+      // 否则加入进程列表
+      var burst = burstQueue.shift();
+      courseQueue.push(1);
+
+      var file_blob = file.slice(burst.start, burst.end);
+      var form_data = new FormData();
+      form_data.append("file", file_blob); // 创建name为file的文件域
+      form_data.append("blob_num", burst.id);
+      form_data.append("total_blob_num", total_blob_num);
+      form_data.append("file_md5_value", fileMd5Value);
+      form_data.append("file_name", file.name);
+      form_data.append("sql_link_url", sqlLinkUrl);
+      form_data.append("token", $("#dou-post-form input[name=token]").val() || "");
+
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", route("admin.file.bigfile", {}, { query: { module: module, type: type, item_id: item_id, target: target, draft_token: draft_token } }), false);
+
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+          courseQueue.shift();
+          progressQueue.push(1);
+        }
+      };
+
+      xhr.send(form_data);
+
+      // 回调
+      var data = JSON.parse(xhr.responseText);
+
+      if (data.wrong) {
+        alert(data.wrong);
+      }
+
+      // 如果是添加详情图片则插入到编辑器
+      if (type == "content") {
+        if (editor == "vditor") {
+          douEditor[target].insertValue(data.html);
+        } else {
+          douEditor[target].execCommand("insertHtml", data.html);
+        }
+      } else {
+        linkId.val(data.file_path);
+      }
+    }
+  }
+
+  // 每次执行后要清空文件域
+  fileId.value = "";
+}
+
+/**
+ +----------------------------------------------------------
+ * Tab 组件（Bootstrap data-api 风格）
+ * 触发器标记 data-dou-toggle="tab"，目标用 href="#id" 或 data-dou-target="#id" 显式配对，
+ * 容器标记 data-dou-tab，导航条 .tab-nav/.tab-pills，激活态落在 .nav-link，
+ * 加载即生效、零使用处初始化；同页多实例以 data-dou-tab 容器隔离。
+ +----------------------------------------------------------
+ */
+function resolveTabTarget($trigger) {
+  var href = $trigger.attr("href");
+  if (href && href.charAt(0) === "#" && href.length > 1) return href;
+  var target = $trigger.attr("data-dou-target");
+  if (target && target.charAt(0) === "#") return target;
+  return null;
+}
+
+// 归属当前 data-dou-tab 容器（排除嵌套）的面板
+function ownTabPanes($root) {
+  var root = $root.get(0);
+  return $root.find(".tab-pane").filter(function () {
+    return $(this).closest("[data-dou-tab]").get(0) === root;
+  });
+}
+
+// 归属当前 data-dou-tab 容器的切换触发器
+function ownTabTriggers($root) {
+  var root = $root.get(0);
+  return $root
+    .find(".tab-nav [data-dou-toggle='tab'], .tab-pills [data-dou-toggle='tab']")
+    .filter(function () {
+      return $(this).closest("[data-dou-tab]").get(0) === root;
+    });
+}
+
+// 在指定 data-dou-tab 容器内按 id 激活面板（容器内定位，绝不全局查找）
+function activateTab($root, selector) {
+  var $panes = ownTabPanes($root);
+  var $panel = $panes.filter(selector);
+  if (!$panel.length) return;
+  var $triggers = ownTabTriggers($root);
+  $triggers.removeClass("active");
+  $triggers
+    .filter(function () {
+      return resolveTabTarget($(this)) === selector;
+    })
+    .addClass("active");
+  $panes.removeClass("active");
+  $panel.addClass("active");
+}
+
+// 默认激活：markup 未给 active 时落到 data-dou-tab-default 或第一个触发器
+function applyTabDefaults(context) {
+  $("[data-dou-tab]", context).each(function () {
+    var $root = $(this);
+    var $panes = ownTabPanes($root);
+    if (!$panes.length) return; // 纯导航条：仅 CSS + 服务端高亮
+    var $triggers = ownTabTriggers($root);
+    if ($triggers.filter(".active").length && $panes.filter(".active").length) return;
+    var selector = $root.attr("data-dou-tab-default");
+    if (!selector) {
+      var $first = $triggers.first();
+      selector = $first.length ? resolveTabTarget($first) : null;
+    }
+    if (selector) activateTab($root, selector);
+  });
+}
+
+// data-api：document 级委托，加载即生效，动态注入的 Tab 也能点
+$(document).on("click", "[data-dou-toggle='tab']", function (e) {
+  var $trigger = $(this);
+  var $root = $trigger.closest("[data-dou-tab]");
+  var selector = resolveTabTarget($trigger);
+  if (!selector) return; // 无 #目标：当普通链接放行
+  if (!ownTabPanes($root).filter(selector).length) return; // 无对应面板：放行原生跳转
+  e.preventDefault();
+  activateTab($root, selector);
+});
+
+$(function () {
+  applyTabDefaults();
+});
+
+// 对外 API：脚本切换 / 给动态注入内容补默认态
+window.douTab = {
+  show: function (groupId, target) {
+    var $root = $("#" + groupId);
+    if ($root.length) activateTab($root, target.charAt(0) === "#" ? target : "#" + target);
+  },
+  refresh: applyTabDefaults,
+};
+
+/**
+ * 开关式 radio-group（根标记 data-dou-toggle="radio"）
+ * 任意位置点击都在 0/1 两态间切换，而不是固定点击左右半区；
+ * 拦下 label 的默认激活，避免与原生选中叠加造成“切两次”回到原态。
+ */
+$(document).on("click", '[data-dou-toggle="radio"]', function (e) {
+  var $radios = $(this).find("input[type='radio']");
+  if (!$radios.length) return;
+  e.preventDefault();
+  var $checked = $radios.filter(":checked");
+  var next = $checked.length && String($checked.val()) === "1" ? "0" : "1";
+  var $target = $radios.filter("[value='" + next + "']");
+  if (!$target.length) $target = $radios.first();
+  if ($target.prop("checked", true).length) $target.trigger("change");
+});
+
+/**
+ * 后台通用模态框：编程式 douModal.open/show/hide/close + 声明式 data-dou-toggle 委托。
+ */
+(function (global, $) {
+  "use strict";
+
+  var modalSel = "[data-dou-modal-dynamic]"; // 模态根标记（壳恒为动态生成）
+  var activeModal = null;
+  var modalStack = [];
+  var animationSpeed = 300;
+
+  var placements = [
+    "top-right",
+    "top",
+    "top-left",
+    "center",
+    "right",
+    "bottom-right",
+    "bottom",
+    "bottom-left",
+    "left",
+  ];
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function isPlacementName(name) {
+    return name === "center" || $.inArray(name, placements) !== -1;
+  }
+
+  function placementClass(placement, size) {
+    var name = placement || "";
+    if (!name && size === "center") {
+      name = "center";
+    }
+    if ($.inArray(name, placements) === -1) {
+      name = "right";
+    }
+    return "pos-" + name;
+  }
+
+  function normalizeSize(size) {
+    if (!size || size === "default" || size === "center") {
+      return "";
+    }
+    if (size === "big") {
+      return "lg";
+    }
+    if (size === "sm" || size === "lg" || size === "full") {
+      return size;
+    }
+    return "";
+  }
+
+  function sizeModifier(size) {
+    var token = normalizeSize(size);
+    return token ? " size-" + token : "";
+  }
+
+  function resolveModal(target) {
+    if (!target) {
+      return null;
+    }
+    if (target.jquery) {
+      return target.closest(modalSel);
+    }
+    var sel = String(target).charAt(0) === "#" ? target : "#" + target;
+    return $(sel).filter(modalSel).first();
+  }
+
+  function applyModalWidth($dialog, options) {
+    var width = options.width;
+    if (!width) {
+      return;
+    }
+    var px = parseInt(width, 10);
+    if (px > 0) {
+      $dialog.css("--dou-modal-width", px + "px");
+    }
+  }
+
+  function buildModalShell(options) {
+    options = options || {};
+    var posClass = placementClass(options.placement, options.size || options.align);
+    var sizeClass = sizeModifier(options.size);
+    var className = options.className ? " " + options.className : "";
+    var closeLabel = escapeHtml(typeof lang === "function" ? lang("close") : "Close");
+
+    var $modal = $(
+      '<div class="dou-modal" data-dou-modal-dynamic="1" tabindex="-1" aria-hidden="true"></div>'
+    );
+    var $dialog = $('<div class="dou-modal-dialog ' + posClass + sizeClass + className + '"></div>');
+    var $content = $('<div class="dou-modal-content"></div>');
+    var $header = $(
+      '<div class="dou-modal-header">' +
+        '<h5 class="dou-modal-title">' +
+        escapeHtml(options.title || "") +
+        "</h5>" +
+        '<a href="javascript:;" class="dou-modal-close" data-dou-dismiss="modal" aria-label="' +
+        closeLabel +
+        '">&times;</a>' +
+        "</div>"
+    );
+    var $body = $('<div class="dou-modal-body"></div>');
+    var $footer = $('<div class="dou-modal-footer"></div>');
+
+    $content.append($header, $body, $footer);
+    $dialog.append($content);
+    $modal.append($dialog);
+
+    if (options.bodyHtml) {
+      $body.html(options.bodyHtml);
+    }
+
+    applyModalWidth($dialog, options);
+
+    return {
+      $modal: $modal,
+      $dialog: $dialog,
+      $content: $content,
+      $body: $body,
+      $footer: $footer,
+    };
+  }
+
+  function bindModalActions($modal, shell, options) {
+    var $footer = shell.$footer;
+
+    if (options.buttons && options.buttons.length) {
+      renderButtons($footer, options.buttons, $modal);
+    } else if (typeof options.onSubmit === "function") {
+      var $submit = $(
+        '<div class="dou-modal-actions"><a href="javascript:;" class="btn dou-modal-submit">' +
+          escapeHtml(options.submitText || (typeof lang === "function" ? lang("btn_submit") : "OK")) +
+          "</a></div>"
+      );
+      $footer.append($submit);
+      var $submitBtn = $submit.find(".dou-modal-submit");
+      $submitBtn.on("click", function () {
+        if ($submitBtn.hasClass("dou-modal-loading")) {
+          return;
+        }
+        $submitBtn.addClass("dou-modal-loading");
+        options.onSubmit($modal, function () {
+          $submitBtn.removeClass("dou-modal-loading");
+          hide($modal);
+        }, function () {
+          $submitBtn.removeClass("dou-modal-loading");
+        });
+      });
+    }
+
+    if (typeof options.load === "function") {
+      options.load($modal, shell.$body, $footer);
+    }
+  }
+
+  function revealShow($modal) {
+    var $content = $modal.find(".dou-modal-content").first();
+    $content.css({ opacity: 0 });
+    $modal.css({ display: "block", opacity: 0 });
+    $modal.attr("aria-hidden", "false").addClass("is-open");
+    $modal.fadeTo(animationSpeed / 2, 1);
+    $content.delay(animationSpeed / 2).animate({ opacity: 1 }, animationSpeed);
+  }
+
+  function onEscKey(event) {
+    if (event.key === "Escape" || event.keyCode === 27) {
+      hide();
+    }
+  }
+
+  function show(target) {
+    var $modal = resolveModal(target);
+    if (!$modal || !$modal.length) {
+      return null;
+    }
+
+    if (activeModal && activeModal.length && activeModal[0] !== $modal[0]) {
+      if ($modal.data("douStacked") === true && $modal.data("douStackedPushed") !== true) {
+        modalStack.push(activeModal);
+        $modal.data("douStackedPushed", true);
+      } else {
+        hide(activeModal);
+      }
+    }
+
+    activeModal = $modal;
+    $(document).off("keydown.douModal", onEscKey);
+    $(document).on("keydown.douModal", onEscKey);
+
+    $modal.off("mousedown.douModalBackdrop touchstart.douModalBackdrop click.douModalBackdrop");
+    $modal.on("mousedown.douModalBackdrop touchstart.douModalBackdrop", function (e) {
+      var target = e.target || (e.originalEvent && e.originalEvent.target);
+      $modal.data("douBackdropDown", target === $modal[0]);
+    });
+    $modal.on("click.douModalBackdrop", function (e) {
+      var startedOnBackdrop = $modal.data("douBackdropDown") === true;
+      var closeOnOverlay = $modal.data("douCloseOnOverlay") !== false;
+      $modal.data("douBackdropDown", false);
+      if (closeOnOverlay && e.target === $modal[0] && startedOnBackdrop) {
+        hide($modal);
+      }
+    });
+
+    revealShow($modal);
+    return $modal;
+  }
+
+  function hide(target) {
+    var $modal = target ? resolveModal(target) : activeModal;
+    if (!$modal || !$modal.length) {
+      return;
+    }
+
+    var isDynamic = $modal.attr("data-dou-modal-dynamic") === "1";
+    var $content = $modal.find(".dou-modal-content").first();
+
+    $modal.trigger("douModalClose");
+    $(document).off("keydown.douModal", onEscKey);
+
+    if ($modal.hasClass("has-editor-fullscreen") || $modal.find(".editor.fullscreen").length) {
+      $modal.removeClass("has-editor-fullscreen");
+      $modal.find(".editor").removeClass("fullscreen");
+      if (!$(".editor.fullscreen").length) {
+        $("body").css("overflow", "");
+      }
+    }
+
+    $modal.stop(true, true).fadeTo(animationSpeed / 2, 0);
+    $content.stop(true, true).animate({ opacity: 0 }, animationSpeed, function () {
+      $modal.removeClass("is-open").attr("aria-hidden", "true").css("display", "none");
+      if (isDynamic) {
+        $modal.remove();
+      }
+      if (activeModal && activeModal[0] === $modal[0]) {
+        activeModal = modalStack.length ? modalStack.pop() : null;
+        if (activeModal !== null) {
+          $(document).on("keydown.douModal", onEscKey);
+        }
+      }
+    });
+  }
+
+  function close() {
+    hide(activeModal);
+  }
+
+  function open(options) {
+    options = options || {};
+    if (activeModal && options.stack !== true) {
+      hide(activeModal);
+    }
+    var shell = buildModalShell(options);
+    var $modal = shell.$modal;
+
+    $modal.appendTo("body");
+    $modal.data("douCloseOnOverlay", options.closeOnOverlay !== false);
+    $modal.data("douStacked", options.stack === true);
+    // 回车提交开关：默认开启（焦点在文本输入框时回车等同点主提交按钮），
+    // 非「正常表单」语义的弹窗（AI 生成、图片裁剪、备份恢复等）传 noEnterSubmit 关闭
+    $modal.attr("data-dou-no-enter-submit", options.noEnterSubmit ? "1" : "0");
+    bindModalActions($modal, shell, options);
+
+    show($modal);
+
+    if (typeof options.onOpen === "function") {
+      options.onOpen($modal);
+    }
+
+    return $modal;
+  }
+
+  function renderButtons($footer, buttons, $modal) {
+    var i;
+    var html = '<div class="dou-modal-actions">';
+    for (i = 0; i < buttons.length; i++) {
+      var btn = buttons[i];
+      var cls = btn.className || btn.style || "btn";
+      html +=
+        '<a href="javascript:;" class="' +
+        escapeHtml(cls) +
+        '" data-modal-btn="' +
+        i +
+        '">' +
+        escapeHtml(btn.text || "") +
+        "</a>";
+    }
+    html += "</div>";
+    $footer.html(html);
+
+    $footer.find("[data-modal-btn]").each(function () {
+      var idx = parseInt($(this).attr("data-modal-btn"), 10);
+      var btn = buttons[idx];
+      if (!btn) {
+        return;
+      }
+      $(this).on("click", function () {
+        var $el = $(this);
+        if ($el.hasClass("dou-modal-loading") || $el.hasClass("is-generating") || $el.hasClass("disabled")) {
+          return;
+        }
+        if (typeof btn.onClick === "function") {
+          var host = $modal && $modal.length ? $modal : activeModal;
+          btn.onClick(host, function () {
+            hide(host);
+          }, function () {
+            /* 失败时保持弹窗打开，由调用方还原按钮状态 */
+          }, $el);
+          return;
+        }
+        if (btn.href) {
+          if (btn.method === "post") {
+            douPost(btn.href);
+          } else {
+            window.location.href = btn.href;
+          }
+          close();
+        }
+      });
+    });
+  }
+
+  function openMessage($trigger) {
+    var title = $trigger.attr("data-title") || "";
+    var html = $trigger.attr("data-html") || $trigger.attr("data-text") || "";
+    var btnName = $trigger.attr("data-btn-name") || "";
+    var btnLink = $trigger.attr("data-btn-link") || "";
+    var btnMethod = $trigger.attr("data-btn-method") || "";
+    var rawSize = $trigger.attr("data-size") || "";
+    var placement = $trigger.attr("data-placement") || $trigger.attr("data-align") || "";
+    if (!placement && isPlacementName(rawSize)) {
+      placement = rawSize;
+    } else if (!placement) {
+      placement = "center";
+    }
+    var size = !rawSize || isPlacementName(rawSize) ? "default" : rawSize;
+    var buttons = [];
+
+    if (btnName && btnLink) {
+      buttons.push({
+        text: btnName,
+        className: "btn",
+        href: btnLink,
+        method: btnMethod,
+      });
+    }
+
+    open({
+      title: title,
+      placement: placement,
+      size: size,
+      width: $trigger.attr("data-width"),
+      bodyHtml: html ? html : "",
+      buttons: buttons.length ? buttons : undefined,
+    });
+  }
+
+  function openRestore($trigger) {
+    var filename = $trigger.attr("data-filename") || "";
+    open({
+      title: (typeof lang === "function" ? lang("backup_sql_pre") : "Restore") + " " + filename,
+      placement: "right",
+      // 备份恢复不可逆：不允许回车误触「安全导入 / 直接导入」
+      noEnterSubmit: true,
+      bodyHtml:
+        '<div class="dou-modal-message">如果选择 "安全恢复"，系统将会先进行一次自动备份（防止导入后想恢复原来的，备份文件以 "AUTO" 开头），然后再进行导入操作，当然您也可以 "直接恢复"。</div>',
+      buttons: [
+        {
+          text: "安全导入",
+          className: "btn btn-primary",
+          href: route("admin.backup.backup", {}, { query: { act: "all", restore_filename: filename } }),
+          method: "post",
+        },
+        {
+          text: "直接导入",
+          className: "btn gray",
+          href: route("admin.backup.import", {}, { query: { sql_filename: filename } }),
+          method: "post",
+        },
+      ],
+    });
+  }
+
+  function openLangBox($trigger) {
+    if ($trigger.attr("data-draft") === "1") {
+      openDraftLangBox($trigger);
+      return;
+    }
+
+    var languagePack = $trigger.attr("data-lang");
+    var module = $trigger.attr("data-module");
+    var itemId = $trigger.attr("data-item-id");
+    var field = $trigger.attr("data-field");
+    var token = $trigger.attr("data-token");
+    var type = $trigger.attr("data-type");
+    var title = $trigger.attr("data-title") || "";
+    var options = [];
+    var rawOptions = $trigger.attr("data-options") || "";
+    if (rawOptions) {
+      try {
+        options = JSON.parse(rawOptions);
+      } catch (e) {
+        options = [];
+      }
+    }
+
+    $trigger.attr("id", languagePack + "_" + field);
+
+    open({
+      title: title,
+      placement: "right",
+      size: "lg",
+      className: "is-lang",
+      load: function ($modal, $body, $footer) {
+        $body.html('<p class="dou-modal-loading-text">...</p>');
+        $.ajax({
+          type: "POST",
+          url: route("admin.language.value.value"),
+          data: {
+            language_pack: languagePack,
+            module: module,
+            item_id: itemId,
+            field: field,
+            type: type,
+          },
+          dataType: "json",
+          success: function (data) {
+            $body.html(buildLangForm(data, {
+              languagePack: languagePack,
+              module: module,
+              itemId: itemId,
+              field: field,
+              token: token,
+              draftToken: $trigger.closest("form").find('input[name="draft_token"]').first().val() || "",
+              type: type,
+              options: options,
+            }));
+            $footer.html(
+              '<div class="dou-modal-actions">' +
+              '<a href="javascript:;" class="btn dou-modal-lang-submit">' +
+              escapeHtml(typeof lang === "function" ? lang("btn_submit") : "提交") +
+              "</a></div>"
+            );
+            bindLangFormSubmit($modal, $trigger);
+            bindLangFormClear($modal, $trigger);
+            $(document).trigger("douLangFormReady", {
+              $modal: $modal,
+              $trigger: $trigger,
+              field: field,
+              type: type,
+            });
+          },
+          error: function () {
+            alert("系统错误，请联系管理员！");
+            close();
+          },
+        });
+      },
+    });
+  }
+
+  function buildLangForm(data, ctx) {
+    var option = "";
+    var popupEditorId;
+    var options = ctx.options || [];
+
+    if (ctx.type === "content") {
+      popupEditorId = ctx.module + "ContentID" + Date.parse(new Date());
+
+      if (typeof cur_editor !== "undefined" && cur_editor === "vditor") {
+        option =
+          '<div class="editor-content low"><div id="' +
+          popupEditorId +
+          '" class="editor-class"></div></div><textarea id="' +
+          popupEditorId +
+          'Textarea" name="value" style="display: none;">' +
+          escapeHtml(data.value) +
+          '</textarea><script type="text/javascript">initEditor(\'' +
+          popupEditorId +
+          "')</script>";
+      } else {
+        option =
+          '<script id="' +
+          popupEditorId +
+          '" name="value" type="text/plain" class="editor-class">' +
+          data.value +
+          '</script><script type="text/javascript">initEditor(\'' +
+          popupEditorId +
+          "', '200')</script>";
+      }
+
+      option =
+        '<div id="' +
+        popupEditorId +
+        'Editor" class="editor">' +
+        '<div class="editor-bar">' +
+        '<div class="editor-bar-left">' +
+        '<div class="file-upload">' +
+        (data.paid_use
+          ? '<div class="editor-btn" onClick="editorInsert(\'' +
+            popupEditorId +
+            "', '<hr/>');\"><span class=\"btn-file\">" +
+            lang("insert_paid_use_line") +
+            "</span></div>"
+          : "") +
+        '<div id="' +
+        popupEditorId +
+        'File" class="editor-btn" data-file-type="content" data-file-prefix="' +
+        popupEditorId +
+        '" data-file-module="' +
+        ctx.module +
+        '" data-file-item-id="' +
+        ctx.itemId +
+        '" data-file-draft-token="' +
+        escapeHtml(ctx.draftToken || "") +
+        '" data-file-language-pack="' +
+        escapeHtml(ctx.languagePack || "") +
+        '" data-file-editor="' +
+        cur_editor +
+        '"><span class="btn-file" data-file-pick>' +
+        lang("file_insert_image") +
+        '</span><span class="file-status" style="display:none"><img src="images/loader.gif" alt="uploading"/></span></div>' +
+        '<div id="' +
+        popupEditorId +
+        'BigFile" class="editor-btn" onChange="fileBig(\'content\', \'' +
+        popupEditorId +
+        "', '" +
+        ctx.module +
+        "', '" +
+        ctx.itemId +
+        "', '" +
+        cur_editor +
+        '\');"><input type="file" class="field"><span class="btn-file">' +
+        lang("file_insert_media") +
+        '<em class="percent"></em></span></div>' +
+        "</div></div>" +
+        '<div class="editor-bar-right">' +
+        '<span class="editor-text"><label><input name="content_remote_image_local" type="checkbox"> ' +
+        lang("file_remote_image_local") +
+        "</label></span>" +
+        '<span class="editor-text btn-fullscreen" onclick="btnFullscreen(\'' +
+        popupEditorId +
+        "', '200')\"><em class=\"yes\">" +
+        lang("fullscreen") +
+        '</em><em class="no">' +
+        lang("fullscreen_exit") +
+        "</em></span></div></div>" +
+        option +
+        "</div>";
+    } else if (ctx.type === "file" || ctx.type === "image") {
+      option = '<input type="file" name="value" size="38" class="input-file"' +
+        (ctx.type === "image" ? ' accept="image/*"' : "") + " />";
+      if (data.value) {
+        option +=
+          '<a href="' +
+          escapeHtml(data.value) +
+          '" target="_blank"><img class="icon" src="images/icon_yes.png"></a>';
+      } else {
+        option += '<img class="icon" src="images/icon_no.png">';
+      }
+    } else if (ctx.type === "select") {
+      var selectedValue = data.value === null || typeof data.value === "undefined" ? "" : String(data.value);
+      option = '<select name="value" class="select">';
+      for (var si = 0; si < options.length; si++) {
+        var optionValue = String(options[si]);
+        option +=
+          '<option value="' + escapeHtml(optionValue) + '"' +
+          (optionValue === selectedValue ? ' selected="selected"' : "") + ">" +
+          escapeHtml(optionValue) + "</option>";
+      }
+      option += "</select>";
+    } else if (ctx.type === "radio") {
+      var checkedValue = data.value === null || typeof data.value === "undefined" ? "" : String(data.value);
+      for (var ri = 0; ri < options.length; ri++) {
+        var radioValue = String(options[ri]);
+        option +=
+          '<label class="radio"><input type="radio" name="value" value="' + escapeHtml(radioValue) + '"' +
+          (radioValue === checkedValue ? ' checked="checked"' : "") + " /> " + escapeHtml(radioValue) + "</label>";
+      }
+    } else if (ctx.type === "checkbox") {
+      var checkedOptions = data.value;
+      if (typeof checkedOptions === "string") {
+        try {
+          checkedOptions = JSON.parse(checkedOptions);
+        } catch (e) {
+          checkedOptions = [];
+        }
+      }
+      if (!Array.isArray(checkedOptions)) {
+        checkedOptions = [];
+      }
+      for (var ci = 0; ci < options.length; ci++) {
+        var checkValue = String(options[ci]);
+        option +=
+          '<label class="checkbox"><input type="checkbox" name="value[]" value="' + escapeHtml(checkValue) + '"' +
+          (checkedOptions.indexOf(checkValue) !== -1 ? ' checked="checked"' : "") + " /> " + escapeHtml(checkValue) + "</label>";
+      }
+    } else if (ctx.type === "switch") {
+      var switchValue = String(data.value) === "1" ? "1" : "0";
+      option =
+        '<select name="value" class="select">' +
+        '<option value="0"' + (switchValue === "0" ? ' selected="selected"' : "") + ">" +
+        escapeHtml(typeof lang === "function" ? lang("no") : "No") + "</option>" +
+        '<option value="1"' + (switchValue === "1" ? ' selected="selected"' : "") + ">" +
+        escapeHtml(typeof lang === "function" ? lang("yes") : "Yes") + "</option></select>";
+    } else if (ctx.type === "number" || ctx.type === "date") {
+      option =
+        '<input type="' + ctx.type + '" name="value" class="input" value="' +
+        escapeHtml(data.value) + '" />';
+    } else if (ctx.type === "textarea") {
+      option =
+        '<textarea name="value" cols="115" rows="3" class="textarea">' +
+        escapeHtml(data.value) +
+        "</textarea>";
+    } else {
+      option =
+        '<input type="text" name="value" class="input" value="' +
+        escapeHtml(data.value) +
+        '" size="20" />';
+    }
+
+    // 多语言工具条（一键翻译槽 + 清空）仅在存在启用中的 translate 应用时输出
+    var hasLangTranslate = false;
+    var aiConfigEl = document.getElementById("ai-config");
+    if (aiConfigEl) {
+      try {
+        var aiConfig = JSON.parse(aiConfigEl.textContent || aiConfigEl.innerHTML);
+        hasLangTranslate = !!(aiConfig && aiConfig.translate && aiConfig.translate.length);
+      } catch (e) {
+        hasLangTranslate = false;
+      }
+    }
+
+    var langToolbar = hasLangTranslate
+      ? '<div class="dou-modal-lang-toolbar">' +
+        '<span class="action ai-lang-translate"></span>' +
+        '<a href="javascript:;" class="dou-modal-lang-clear">' +
+        escapeHtml(typeof lang === "function" ? lang("ai_lang_clear", "清空") : "清空") +
+        "</a></div>"
+      : "";
+
+    return (
+      '<form class="dou-modal-lang-form" action="' +
+      route("admin.language.value.store") +
+      '" method="post" enctype="multipart/form-data">' +
+      langToolbar +
+      '<div class="form">' +
+      '<div class="form-item">' +
+      '<div class="input-block">' +
+      option +
+      "</div></div></div>" +
+      '<input type="hidden" name="language_pack" value="' +
+      escapeHtml(ctx.languagePack) +
+      '" />' +
+      '<input type="hidden" name="module" value="' +
+      escapeHtml(ctx.module) +
+      '" />' +
+      '<input type="hidden" name="item_id" value="' +
+      escapeHtml(ctx.itemId) +
+      '" />' +
+      '<input type="hidden" name="field" value="' +
+      escapeHtml(ctx.field) +
+      '" />' +
+      '<input type="hidden" name="token" value="' +
+      escapeHtml(ctx.token) +
+      '" />' +
+      '<input type="hidden" name="type" value="' +
+      escapeHtml(ctx.type) +
+      '" />' +
+      "</form>"
+    );
+  }
+
+  function bindLangFormClear($modal, $trigger) {
+    $modal.find(".dou-modal-lang-clear").off("click.douModal").on("click.douModal", function (e) {
+      e.preventDefault();
+      clearLangModalValue($modal, $trigger.attr("data-type"));
+    });
+  }
+
+  function clearLangModalValue($modal, type) {
+    if (type === "content" && window.douEditor) {
+      var id;
+      for (id in window.douEditor) {
+        if (!Object.prototype.hasOwnProperty.call(window.douEditor, id)) {
+          continue;
+        }
+        if (!$modal.find("#" + id).length && !$modal.find("#" + id + "Editor").length) {
+          continue;
+        }
+        var editor = window.douEditor[id];
+        if (typeof editor.setValue === "function") {
+          editor.setValue("");
+        } else if (typeof editor.setContent === "function") {
+          editor.setContent("");
+        }
+        var $shadow = $modal.find("#" + id + "Textarea");
+        if ($shadow.length) {
+          $shadow.val("");
+        }
+        return;
+      }
+    }
+
+    if (type === "checkbox") {
+      $modal.find('.dou-modal-lang-form [name="value[]"]').prop("checked", false);
+      return;
+    }
+    if (type === "radio") {
+      $modal.find('.dou-modal-lang-form [name="value"]').prop("checked", false);
+      return;
+    }
+    $modal.find('.dou-modal-lang-form [name="value"]').first().val("").trigger("change");
+  }
+
+  function bindLangFormSubmit($modal, $trigger) {
+    var $form = $modal.find(".dou-modal-lang-form");
+    if (!$form.length) {
+      return;
+    }
+
+    // 表单生成后立即初始化 ajaxForm：点击提交按钮与回车触发的浏览器原生提交
+    // 均会被 jquery.form 的 submit 拦截转为 ajax 请求，避免整页跳转到 action 地址
+    $form.ajaxForm({
+      type: "POST",
+      data: {},
+      dataType: "json",
+      success: function (resp) {
+        if (resp && resp.id) {
+          $("#" + resp.id).addClass("cur");
+        }
+        close();
+      },
+      error: function (xhr) {
+        var resp = xhr.responseJSON;
+        alert(resp && resp.message ? resp.message : "操作失败");
+      },
+      clearForm: true,
+    });
+
+    $modal.find(".dou-modal-lang-submit").off("click.douModal").on("click.douModal", function () {
+      $form.submit();
+    });
+  }
+
+  function draftHasAiTranslate() {
+    var el = document.getElementById("ai-config");
+    if (!el) {
+      return false;
+    }
+    try {
+      var config = JSON.parse(el.textContent || el.innerHTML);
+      return !!(config && config.translate && config.translate.length);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function draftElements(name, $scope) {
+    if (!name) {
+      return $();
+    }
+    if ($scope && $scope.length) {
+      return $scope.find("[name]").filter(function () {
+        return this.name === name;
+      });
+    }
+    return $(document.getElementsByName(name));
+  }
+
+  function draftReadName(name, $scope) {
+    var $elems = draftElements(name, $scope);
+    if (!$elems.length) {
+      return "";
+    }
+    var first = $elems[0];
+    if (first.type === "checkbox") {
+      var values = [];
+      $elems.filter(":checked").each(function () {
+        values.push($(this).val());
+      });
+      return values;
+    }
+    if (first.type === "radio") {
+      var $checked = $elems.filter(":checked");
+      return $checked.length ? $checked.val() : "";
+    }
+    return $(first).val();
+  }
+
+  function draftHasOverride($trigger) {
+    var inheritName = $trigger.attr("data-draft-inherit");
+    if (inheritName) {
+      var $inherit = draftElements(inheritName, $trigger.closest("form"));
+      return $inherit.length ? !$inherit.prop("checked") : false;
+    }
+    return $trigger.hasClass("cur") || $trigger.attr("data-cur") === "1";
+  }
+
+  function draftEnableMetadata($trigger) {
+    var inheritName = $trigger.attr("data-draft-inherit");
+    if (!inheritName) {
+      return;
+    }
+    var $inherit = draftElements(inheritName, $trigger.closest("form"));
+    if ($inherit.length && $inherit.prop("checked")) {
+      $inherit.prop("checked", false).trigger("change");
+    }
+  }
+
+  function draftDisableMetadata($trigger) {
+    var inheritName = $trigger.attr("data-draft-inherit");
+    if (!inheritName) {
+      return;
+    }
+    var $inherit = draftElements(inheritName, $trigger.closest("form"));
+    if ($inherit.length && !$inherit.prop("checked")) {
+      $inherit.prop("checked", true).trigger("change");
+    }
+  }
+
+  function draftFilePreview(name, $scope) {
+    var $file = draftElements(name, $scope).closest(".file-image");
+    var src = $file.find(".file-image-preview").attr("src") || "";
+    if (!src) {
+      src = draftElements(name, $scope).closest(".metadata-file").find("a").attr("href") || "";
+    }
+    return src;
+  }
+
+  function draftReadEditor(id) {
+    if (!id) {
+      return "";
+    }
+    if (window.douEditor && window.douEditor[id]) {
+      var editor = window.douEditor[id];
+      if (typeof editor.getValue === "function") {
+        return editor.getValue();
+      }
+      if (typeof editor.getContent === "function") {
+        return editor.getContent();
+      }
+    }
+    var shadow = document.getElementById(id + "Textarea");
+    if (shadow) {
+      return $(shadow).val();
+    }
+    var node = document.getElementById(id);
+    return node && node.value ? node.value : "";
+  }
+
+  function draftWriteEditor(id, value) {
+    if (!id) {
+      return;
+    }
+    if (window.douEditor && window.douEditor[id]) {
+      var editor = window.douEditor[id];
+      if (typeof editor.setValue === "function") {
+        editor.setValue(value || "");
+      } else if (typeof editor.setContent === "function") {
+        editor.setContent(value || "");
+      }
+    }
+    var shadow = document.getElementById(id + "Textarea");
+    if (shadow) {
+      $(shadow).val(value || "");
+    }
+  }
+
+  function draftReadSwitch(name, $scope) {
+    var $elems = draftElements(name, $scope);
+    var checked = $elems.filter(":checkbox:checked");
+    if (checked.length) {
+      return "1";
+    }
+    var $hidden = $elems.filter(":hidden");
+    return $hidden.length ? $hidden.first().val() : "0";
+  }
+
+  function draftReadValue($trigger) {
+    var kind = $trigger.attr("data-draft-kind") || "text";
+    var target = $trigger.attr("data-draft-target") || "";
+    var source = $trigger.attr("data-draft-source") || "";
+    var override = draftHasOverride($trigger);
+    var $scope = $trigger.closest("form");
+
+    // 未添加译文且调用方要求空态时，不回退主表单：
+    // 多语言是“有添加才有”，空值表示该语言尚未创建这条翻译。
+    if (!override && $trigger.attr("data-draft-blank") === "1") {
+      if (kind === "image" || kind === "file") {
+        return { number: "", url: "" };
+      }
+      if (kind === "checkbox") {
+        return [];
+      }
+      if (kind === "options" || kind === "slots") {
+        return {};
+      }
+      return "";
+    }
+
+    if (kind === "editor") {
+      var targetType = $trigger.attr("data-draft-target-type") || "input";
+      if (targetType === "editor") {
+        if (!override) {
+          var sourceEditorValue = draftReadEditor(source);
+          return sourceEditorValue || draftReadEditor(target);
+        }
+        return draftReadEditor(target);
+      }
+      if (!override) {
+        var sourceEditorValue = draftReadEditor(source);
+        return sourceEditorValue || draftReadName(target, $scope);
+      }
+      return draftReadName(target, $scope);
+    }
+
+    if (kind === "image" || kind === "file") {
+      var number = override ? draftReadName(target, $scope) : draftReadName(source, $scope);
+      var preview = override ? draftFilePreview(target, $scope) : draftFilePreview(source, $scope);
+      if (!override && !number) {
+        number = draftReadName(target, $scope);
+      }
+      if (!override && !preview) {
+        preview = draftFilePreview(target, $scope);
+      }
+      if (!preview) {
+        preview = $trigger.attr("data-draft-preview") || "";
+      }
+      return {
+        number: number || "",
+        url: preview || "",
+      };
+    }
+
+    if (kind === "switch") {
+      var switchValue = override ? draftReadSwitch(target, $scope) : draftReadSwitch(source, $scope);
+      if (!override && (switchValue === "" || switchValue === null || typeof switchValue === "undefined")) {
+        switchValue = draftReadSwitch(target, $scope);
+      }
+      return switchValue;
+    }
+
+    if (kind === "checkbox") {
+      var checkedValues = override ? draftReadName(target, $scope) : draftReadName(source, $scope);
+      if (!override && (!checkedValues || !checkedValues.length)) {
+        checkedValues = draftReadName(target, $scope);
+      }
+      return checkedValues || [];
+    }
+
+    if (kind === "options" || kind === "slots") {
+      var raw = draftReadName(target, $scope);
+      if (!raw) {
+        return {};
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        return {};
+      }
+    }
+
+    var value = override ? draftReadName(target, $scope) : draftReadName(source, $scope);
+    if (!override && (value === "" || value === null || typeof value === "undefined")) {
+      value = draftReadName(target, $scope);
+    }
+    return value;
+  }
+
+  function draftEnsureTarget($trigger, name) {
+    if (!name) {
+      return $();
+    }
+    var $form = $trigger.closest("form");
+    var $target = draftElements(name, $form);
+    if ($target.length) {
+      return $target;
+    }
+    var input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = "";
+    if ($form.length) {
+      $form.append(input);
+    } else {
+      document.body.appendChild(input);
+    }
+    return $(input);
+  }
+
+  function draftWriteName($trigger, name, value) {
+    var $targets = draftEnsureTarget($trigger, name);
+    if (!$targets.length) {
+      return;
+    }
+    var first = $targets.get(0);
+    if (first && first.type === "checkbox") {
+      var values = Array.isArray(value) ? value : (value === "" || value === null ? [] : [String(value)]);
+      $targets.each(function () {
+        $(this).prop("checked", values.indexOf($(this).val()) !== -1);
+      });
+      return;
+    }
+    if (first && first.type === "radio") {
+      $targets.each(function () {
+        $(this).prop("checked", String($(this).val()) === String(value));
+      });
+      return;
+    }
+    $targets.first().val(value === null || typeof value === "undefined" ? "" : value);
+  }
+
+  function draftWriteSwitch($trigger, value) {
+    var $targets = draftEnsureTarget($trigger, $trigger.attr("data-draft-target"));
+    var $checkboxes = $targets.filter(":checkbox");
+    var $hidden = $targets.filter(":hidden");
+    if ($hidden.length) {
+      $hidden.val("0");
+    }
+    if ($checkboxes.length) {
+      $checkboxes.prop("checked", String(value) === "1");
+    } else {
+      $targets.first().val(String(value) === "1" ? "1" : "0");
+    }
+  }
+
+  function draftWriteValue($trigger, value, $modal) {
+    var kind = $trigger.attr("data-draft-kind") || "text";
+    var target = $trigger.attr("data-draft-target") || "";
+    var override = draftHasOverride($trigger);
+    var $scope = $trigger.closest("form");
+
+    if (kind === "image" || kind === "file") {
+      var number = value && typeof value === "object" ? value.number : value;
+      if (!number) {
+        draftClearOverride($trigger, $modal);
+        return;
+      }
+      draftEnableMetadata($trigger);
+      var clearName = target.replace(/^metadata\[/, "metadata_clear[");
+      if (clearName !== target) {
+        draftElements(clearName, $scope).prop("checked", false);
+      }
+      draftWriteName($trigger, target, number);
+      if ($modal && $modal.data("draft-url")) {
+        $trigger.attr("data-draft-preview", $modal.data("draft-url"));
+      }
+      var $targetFile = draftElements(target, $scope).closest(".file-image");
+      if ($targetFile.length && $modal && $modal.data("draft-url")) {
+        $targetFile.attr("data-initial-src", $modal.data("draft-url")).attr("data-initial-number", number);
+        $targetFile.find(".file-image-preview").attr("src", $modal.data("draft-url"));
+      }
+      $trigger.addClass("cur");
+      return;
+    }
+
+    if (kind === "editor") {
+      draftEnableMetadata($trigger);
+      var targetType = $trigger.attr("data-draft-target-type") || "input";
+      if (targetType === "editor") {
+        draftWriteEditor(target, value);
+      } else {
+        draftWriteName($trigger, target, value);
+      }
+      if (value !== "") {
+        $trigger.addClass("cur");
+      } else {
+        draftClearOverride($trigger, $modal);
+      }
+      return;
+    }
+
+    if (kind === "switch") {
+      if (value === "" || value === null || typeof value === "undefined") {
+        draftClearOverride($trigger, $modal);
+        return;
+      }
+      draftEnableMetadata($trigger);
+      draftWriteSwitch($trigger, value);
+      $trigger.addClass("cur");
+      return;
+    }
+
+    if (kind === "checkbox") {
+      var values = Array.isArray(value) ? value : [];
+      if (!values.length) {
+        draftClearOverride($trigger, $modal);
+        return;
+      }
+      draftEnableMetadata($trigger);
+      draftWriteName($trigger, target, values);
+      $trigger.addClass("cur");
+      return;
+    }
+
+    if (kind === "options" || kind === "slots") {
+      var map = value && typeof value === "object" ? value : {};
+      var hasOption = false;
+      for (var key in map) {
+        if (Object.prototype.hasOwnProperty.call(map, key) && map[key] !== "") {
+          hasOption = true;
+          break;
+        }
+      }
+      if (!hasOption) {
+        draftClearOverride($trigger, $modal);
+        return;
+      }
+      draftWriteName($trigger, target, JSON.stringify(map));
+      $trigger.addClass("cur");
+      return;
+    }
+
+    if (value === "" || value === null || typeof value === "undefined") {
+      draftClearOverride($trigger, $modal);
+      return;
+    }
+
+    draftEnableMetadata($trigger);
+    draftWriteName($trigger, target, value);
+    $trigger.addClass("cur");
+  }
+
+  function draftClearOverride($trigger, $modal) {
+    var kind = $trigger.attr("data-draft-kind") || "text";
+    var target = $trigger.attr("data-draft-target") || "";
+    var $scope = $trigger.closest("form");
+
+    if ($modal && (kind === "image" || kind === "file")
+        && ($modal.data("draft-file-changed") || $modal.data("draft-file-deleted"))) {
+      var releaseUrl = $trigger.attr("data-draft-release-url") || route("admin.metadata.draft.release");
+      var number = $modal.data("draft-number");
+      if (number) {
+        $.ajax({
+          type: "POST",
+          url: releaseUrl,
+          data: {
+            module: $trigger.attr("data-draft-module") || "",
+            number: number,
+            token: $trigger.attr("data-token") || "",
+          },
+          dataType: "json",
+        });
+      }
+      $modal.data("draft-file-changed", false).data("draft-number", "").data("draft-file-deleted", false);
+    }
+
+    if (kind === "editor") {
+      var targetType = $trigger.attr("data-draft-target-type") || "input";
+      if (targetType === "editor") {
+        draftWriteEditor(target, "");
+      } else {
+        draftWriteName($trigger, target, "");
+      }
+    } else if (kind === "checkbox") {
+      draftWriteName($trigger, target, []);
+    } else if (kind === "switch") {
+      draftWriteSwitch($trigger, "0");
+    } else {
+      draftWriteName($trigger, target, "");
+    }
+
+    if ($trigger.attr("data-draft-inherit")) {
+      draftDisableMetadata($trigger);
+      var $field = draftElements($trigger.attr("data-draft-inherit"), $scope).closest("[data-dou-metadata-field]");
+      $field.find(".metadata-control").find("input, select, textarea").val("");
+      $field.find(".metadata-control").find("input[type=checkbox], input[type=radio]").prop("checked", false);
+      $field.find(".metadata-control").find("input[type=hidden]").val("");
+    }
+    $trigger.removeClass("cur");
+  }
+
+  function draftValuesEqual(a, b) {
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch (e) {
+      return a === b;
+    }
+  }
+
+  /**
+   * 富文本空值归一：UEditor 等空内容可能返回 <p><br></p>，
+   * 空态弹框不得把它当成一次真实输入。
+   *
+   * @param {*} value
+   * @return {boolean}
+   */
+  function draftHtmlIsBlank(value) {
+    if (typeof value !== "string") {
+      return false;
+    }
+    var text = value
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/[\s\u00a0]+/g, "");
+    return text === "";
+  }
+
+  function draftReadFormValue($modal, $trigger) {
+    var kind = $trigger.attr("data-draft-kind") || "text";
+    var $form = $modal.find(".dou-modal-lang-form");
+
+    if (kind === "editor") {
+      return draftReadEditor($form.attr("data-draft-editor-id"));
+    }
+    if (kind === "image" || kind === "file") {
+      var draftNumber = $modal.data("draft-number") || "";
+      if (!draftNumber) {
+        draftNumber = String($form.find('[name="draft_number"]').val() || "");
+      }
+      return {
+        number: draftNumber,
+      };
+    }
+    if (kind === "options") {
+      var map = {};
+      $form.find(".draft-option-input").each(function () {
+        var option = $(this).attr("data-option");
+        var label = $(this).val();
+        if (option && label !== "") {
+          map[option] = label;
+        }
+      });
+      return map;
+    }
+    if (kind === "slots") {
+      // 分区译文：只读固定 key 行，空值不写入覆盖 map
+      var slotMap = {};
+      $form.find(".draft-slot-input").each(function () {
+        var slot = $(this).attr("data-slot");
+        var text = $(this).val();
+        if (slot && text !== "") {
+          slotMap[slot] = text;
+        }
+      });
+      return slotMap;
+    }
+    if (kind === "checkbox") {
+      var values = [];
+      $form.find('[name="value[]"]:checked').each(function () {
+        values.push($(this).val());
+      });
+      return values;
+    }
+    if (kind === "radio") {
+      var $checked = $form.find('[name="value"]:checked');
+      return $checked.length ? $checked.val() : "";
+    }
+    return $form.find('[name="value"]').first().val();
+  }
+
+  function draftOptionRows($trigger, current, $scope) {
+    var source = $trigger.attr("data-draft-source") || "";
+    var $source = draftElements(source, $scope).filter("textarea").first();
+    var lines = $source.length ? String($source.val() || "").split(/\r?\n/) : [];
+    var seen = {};
+    var html = "";
+    for (var i = 0; i < lines.length; i++) {
+      var option = $.trim(lines[i]);
+      if (!option || seen[option]) {
+        continue;
+      }
+      seen[option] = true;
+      var value = current && current[option] ? current[option] : "";
+      html +=
+        '<div class="form-item">' +
+        '<div class="form-label">' + escapeHtml(option) + "</div>" +
+        '<div class="input-block"><input type="text" class="input draft-option-input" data-option="' +
+        escapeHtml(option) + '" value="' + escapeHtml(value) + '" /></div>' +
+        "</div>";
+    }
+    return html;
+  }
+
+  function draftSlotRows($trigger, current, $scope) {
+    var $keys = $scope.find('input[name="slot_key[]"]');
+    var seen = {};
+    var html = "";
+    $keys.each(function () {
+      var slot = String($(this).val() || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+      if (!slot || seen[slot]) {
+        return;
+      }
+      seen[slot] = true;
+      var value = current && current[slot] ? current[slot] : "";
+      html +=
+        '<div class="form-item">' +
+        '<div class="form-label">' + escapeHtml(slot) + "</div>" +
+        '<div class="input-block"><textarea class="textarea draft-slot-input" data-slot="' +
+        escapeHtml(slot) + '" rows="3">' + escapeHtml(value) + "</textarea></div>" +
+        "</div>";
+    });
+    if (!html) {
+      return '<div class="cue">' +
+        escapeHtml(typeof lang === "function" ? lang("slots_lang_empty") : "No slots") +
+        "</div>";
+    }
+    return html;
+  }
+
+  function buildDraftLangForm($trigger, initial) {
+    var kind = $trigger.attr("data-draft-kind") || "text";
+    var source = $trigger.attr("data-draft-source") || "";
+    var $scope = $trigger.closest("form");
+    var blank = $trigger.attr("data-draft-blank") === "1" && !draftHasOverride($trigger);
+    var blankOption = blank ? '<option value=""></option>' : "";
+    var html = "";
+
+    if (kind === "editor") {
+      var editorId = "draftLangEditor" + Date.parse(new Date());
+      var editorValue = typeof initial === "string" ? initial : "";
+      var editorModule = $trigger.attr("data-draft-module") || "";
+      var editorItemId = $trigger.attr("data-draft-item-id") || "0";
+      var editorDraftToken = $scope.find('input[name="draft_token"]').first().val() || "";
+      var editorLang = $trigger.attr("data-lang") || "";
+      var editorKind = typeof cur_editor !== "undefined" ? cur_editor : "ueditor";
+      var editorHtml;
+      if (editorKind === "vditor") {
+        editorHtml =
+          '<div class="editor-content low"><div id="' + editorId + '" class="editor-class"></div>' +
+          '<textarea id="' + editorId + 'Textarea" style="display:none">' + escapeHtml(editorValue) + "</textarea>" +
+          "<script type=\"text/javascript\">initEditor('" + editorId + "')</script></div>";
+      } else {
+        editorHtml =
+          '<script id="' + editorId + '" type="text/plain" class="editor-class">' + editorValue + "</script>" +
+          "<script type=\"text/javascript\">initEditor('" + editorId + "', '200')</script>";
+      }
+      var editorToolbar =
+        '<div class="editor-bar"><div class="editor-bar-left">' +
+        '<div id="' + editorId + 'File" class="editor-btn"' +
+        ' data-file-type="content"' +
+        ' data-file-prefix="' + editorId + '"' +
+        ' data-file-module="' + escapeHtml(editorModule) + '"' +
+        ' data-file-item-id="' + escapeHtml(editorItemId) + '"' +
+        ' data-file-draft-token="' + escapeHtml(editorDraftToken) + '"' +
+        ' data-file-language-pack="' + escapeHtml(editorLang) + '"' +
+        ' data-file-editor="' + escapeHtml(editorKind) + '">' +
+        '<span class="btn-file" data-file-pick>' +
+        escapeHtml(typeof lang === "function" ? lang("file_insert_image") : "Insert image") +
+        '</span><span class="file-status" style="display:none"><img src="images/loader.gif" alt="uploading"/></span>' +
+        "</div></div></div>";
+      html = '<div id="' + editorId + 'Editor" class="editor">' + editorToolbar + editorHtml + "</div>";
+      return (
+        '<form class="dou-modal-lang-form dou-modal-lang-draft" data-draft-editor-id="' + editorId + '">' +
+        '<div class="form"><div class="form-item"><div class="input-block">' + html + "</div></div></div></form>"
+      );
+    }
+
+    if (kind === "image" || kind === "file") {
+      var accept = $trigger.attr("data-draft-accept") || (kind === "image" ? "image/*" : "");
+      var previewUrl = initial && initial.url ? initial.url : (blank ? "" : ($trigger.attr("data-draft-preview") || ""));
+      var number = initial && initial.number ? initial.number : "";
+
+      if (kind === "image") {
+        var $sourceBox = draftElements(source, $scope).closest(".file-image");
+        var cropRatio = $sourceBox.length ? String($sourceBox.attr("data-crop-ratio") || "") : "";
+        var cropChecked = $sourceBox.length && $sourceBox.find(".file-crop-pref").prop("checked");
+        var fileId = "draftLangFile" + Date.now();
+        var previewImg = previewUrl
+          ? '<img class="file-image-preview" src="' + escapeHtml(previewUrl) + '" alt="" />'
+          : '<img class="file-image-preview" alt="" />';
+        var draftAttrs =
+          ' data-initial-src="' + escapeHtml(previewUrl) + '"' +
+          ' data-initial-number="' + escapeHtml(number) + '"' +
+          ' data-crop-ratio="' + escapeHtml(cropRatio) + '"' +
+          ' data-defer-delete="1"' +
+          ' data-draft-upload-url="' + escapeHtml($trigger.attr("data-draft-upload-url") || "") + '"' +
+          ' data-draft-release-url="' + escapeHtml($trigger.attr("data-draft-release-url") || "") + '"' +
+          ' data-draft-module="' + escapeHtml($trigger.attr("data-draft-module") || "") + '"' +
+          ' data-draft-slug="' + escapeHtml($trigger.attr("data-draft-slug") || "") + '"' +
+          ' data-draft-lang="' + escapeHtml($trigger.attr("data-lang") || "") + '"' +
+          ' data-draft-token="' + escapeHtml($trigger.attr("data-token") || "") + '"';
+        html =
+          '<div class="file-image' + (previewUrl ? " file-image-filled" : "") + '" data-dou-file-image' + draftAttrs + '>' +
+          '<input type="hidden" class="file-number" name="draft_number" value="' + escapeHtml(number) + '" />' +
+          '<div class="file-image-stage">' +
+          '<label for="' + fileId + '" class="file-image-label">' +
+          '<i class="file-placeholder bi-plus-lg"></i>' + previewImg +
+          '<input type="file" id="' + fileId + '" name="' + fileId + '" accept="' + escapeHtml(accept) + '" />' +
+          "</label>" +
+          '<div class="file-image-mask">' +
+          '<button type="button" class="file-action file-action-upload bi-upload" title="' + escapeHtml(typeof lang === "function" ? lang("file_btn") : "Upload") + '" tabindex="-1"></button>' +
+          '<button type="button" class="file-action file-action-replace bi-arrow-repeat" title="' + escapeHtml(typeof lang === "function" ? lang("replace") : "Replace") + '" tabindex="-1"></button>' +
+          '<button type="button" class="file-action file-action-crop bi-scissors" title="' + escapeHtml(typeof lang === "function" ? lang("crop_title") : "Crop") + '"></button>' +
+          '<button type="button" class="file-action file-action-remove bi-x" title="' + escapeHtml(typeof lang === "function" ? lang("del") : "Delete") + '"></button>' +
+          "</div></div>" +
+          '<div class="file-rail"><i class="file-rail-icon bi-scissors" aria-hidden="true"></i>' +
+          '<label class="file-crop-check" title="' + escapeHtml(typeof lang === "function" ? lang("crop_on_upload") : "Crop on upload") + '">' +
+          '<input type="checkbox" class="file-crop-pref" data-crop-scope="thumb"' + (cropChecked ? ' checked="checked"' : "") + " /></label></div>" +
+          "</div>";
+        return '<form class="dou-modal-lang-form dou-modal-lang-draft"><div class="form"><div class="form-item"><div class="input-block">' + html + "</div></div></div></form>";
+      }
+
+      var previewHtml = "";
+      if (previewUrl) {
+        previewHtml = '<a href="' + escapeHtml(previewUrl) + '" target="_blank" rel="noopener">' + escapeHtml(previewUrl) + "</a>";
+      }
+      html =
+        '<div class="draft-file-control">' +
+        '<input type="file" class="draft-file-input" accept="' + escapeHtml(accept) + '" />' +
+        '<input type="hidden" name="draft_number" value="' + escapeHtml(number) + '" />' +
+        '<div class="draft-file-preview">' + previewHtml + "</div>" +
+        '<a href="javascript:;" class="draft-file-clear">' + escapeHtml(typeof lang === "function" ? lang("btn_reset") : "Reset") + "</a>" +
+        "</div>";
+      return '<form class="dou-modal-lang-form dou-modal-lang-draft">' + html + "</form>";
+    }
+
+    if (kind === "options") {
+      html = draftOptionRows($trigger, initial || {}, $scope);
+      return '<form class="dou-modal-lang-form dou-modal-lang-draft">' + html + "</form>";
+    }
+
+    if (kind === "slots") {
+      html = draftSlotRows($trigger, initial || {}, $scope);
+      return '<form class="dou-modal-lang-form dou-modal-lang-draft">' + html + "</form>";
+    }
+
+    if (kind === "select") {
+      var $select = draftElements(source, $scope).filter("select").first();
+      var optionsHtml = "";
+      var selected = initial === null || typeof initial === "undefined" ? "" : String(initial);
+      if ($select.length) {
+        $select.find("option").each(function () {
+          var value = $(this).val();
+          optionsHtml +=
+            '<option value="' + escapeHtml(value) + '"' +
+            (String(value) === selected ? ' selected="selected"' : "") + ">" +
+            escapeHtml($(this).text()) + "</option>";
+        });
+      } else {
+        var dataOptions = $trigger.attr("data-draft-options");
+        if (dataOptions) {
+          try {
+            var parsed = JSON.parse(dataOptions);
+            for (var i = 0; i < parsed.length; i++) {
+              optionsHtml +=
+                '<option value="' + escapeHtml(parsed[i]) + '"' +
+                (String(parsed[i]) === selected ? ' selected="selected"' : "") + ">" +
+                escapeHtml(parsed[i]) + "</option>";
+            }
+          } catch (e) {}
+        }
+      }
+      html = '<select name="value" class="select">' + blankOption + optionsHtml + "</select>";
+    } else if (kind === "radio" || kind === "checkbox") {
+      var $source = draftElements(source, $scope);
+      var currentValues = Array.isArray(initial) ? initial : (initial === "" || initial === null ? [] : [String(initial)]);
+      $source.each(function () {
+        var value = $(this).val();
+        var label = $(this).closest("label").clone().children("input").remove().end().text();
+        label = $.trim(label) || value;
+        var checked = currentValues.indexOf(String(value)) !== -1;
+        html +=
+          '<label class="' + kind + '"><input type="' + (kind === "radio" ? "radio" : "checkbox") +
+          '" name="' + (kind === "radio" ? "value" : "value[]") + '" value="' + escapeHtml(value) + '"' +
+          (checked ? ' checked="checked"' : "") + " /> " + escapeHtml(label) + "</label>";
+      });
+    } else if (kind === "switch") {
+      html =
+        '<select name="value" class="select">' + blankOption +
+        '<option value="0"' + (String(initial) === "0" ? ' selected="selected"' : "") + ">" +
+        escapeHtml(typeof lang === "function" ? lang("no") : "No") + "</option>" +
+        '<option value="1"' + (String(initial) === "1" ? ' selected="selected"' : "") + ">" +
+        escapeHtml(typeof lang === "function" ? lang("yes") : "Yes") + "</option>" +
+        "</select>";
+    } else if (kind === "textarea") {
+      html = '<textarea name="value" cols="115" rows="6" class="textarea">' + escapeHtml(initial || "") + "</textarea>";
+    } else if (kind === "number" || kind === "date") {
+      html = '<input type="' + kind + '" name="value" class="input" value="' + escapeHtml(initial || "") + '" />';
+    } else {
+      html = '<input type="text" name="value" class="input" value="' + escapeHtml(initial || "") + '" />';
+    }
+
+    return (
+      '<form class="dou-modal-lang-form dou-modal-lang-draft">' +
+      '<div class="form"><div class="form-item"><div class="input-block">' + html + "</div></div></div>" +
+      "</form>"
+    );
+  }
+
+  function bindDraftFileUpload($modal, $trigger) {
+    var uploadUrl = $trigger.attr("data-draft-upload-url") || "";
+    if (!uploadUrl) {
+      return;
+    }
+    $modal.find(".draft-file-input").off("change.draftFile").on("change.draftFile", function () {
+      var input = this;
+      if (!input.files || !input.files.length) {
+        return;
+      }
+      var formData = new FormData();
+      formData.append("file", input.files[0]);
+      formData.append("module", $trigger.attr("data-draft-module") || "");
+      formData.append("slug", $trigger.attr("data-draft-slug") || "");
+      formData.append("token", $trigger.attr("data-token") || "");
+      formData.append("language_pack", $trigger.attr("data-lang") || "");
+
+      $modal.find(".draft-file-preview").html('<span class="cue">uploading...</span>');
+      $.ajax({
+        type: "POST",
+        url: uploadUrl,
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: "json",
+        success: function (resp) {
+          if (!resp || !resp.ok || !resp.number) {
+            alert(resp && resp.message ? resp.message : "操作失败");
+            return;
+          }
+          var previousNumber = $modal.data("draft-number");
+          if (previousNumber && previousNumber !== resp.number) {
+            $.ajax({
+              type: "POST",
+              url: $trigger.attr("data-draft-release-url") || route("admin.metadata.draft.release"),
+              data: {
+                module: $trigger.attr("data-draft-module") || "",
+                number: previousNumber,
+                token: $trigger.attr("data-token") || "",
+              },
+              dataType: "json",
+            });
+          }
+          $modal.data("draft-number", resp.number).data("draft-file-changed", true).data("draft-url", resp.url || "");
+          $modal.find('[name="draft_number"]').val(resp.number);
+          var kind = $trigger.attr("data-draft-kind") || "file";
+          var preview = resp.url
+            ? (kind === "image"
+              ? '<img src="' + escapeHtml(resp.url) + '" alt="" />'
+              : '<a href="' + escapeHtml(resp.url) + '" target="_blank" rel="noopener">' + escapeHtml(resp.url) + "</a>")
+            : '<span class="cue">' + escapeHtml(resp.number) + "</span>";
+          $modal.find(".draft-file-preview").html(preview);
+        },
+        error: function () {
+          alert("操作失败");
+        },
+      });
+    });
+  }
+
+  function bindDraftFileClear($modal, $trigger) {
+    $modal.find(".draft-file-clear").off("click.draftClear").on("click.draftClear", function (e) {
+      e.preventDefault();
+      draftClearOverride($trigger, $modal);
+      $modal.find(".draft-file-preview").html("");
+      $modal.find('[name="draft_number"]').val("");
+      $modal.data("draft-number", "").data("draft-file-changed", false);
+      close();
+    });
+  }
+
+  function bindDraftLangSubmit($modal, $trigger) {
+    $modal.find(".dou-modal-lang-submit").off("click.draftLang").on("click.draftLang", function (e) {
+      e.preventDefault();
+      var kind = $trigger.attr("data-draft-kind") || "text";
+      if ((kind === "image" || kind === "file") && $modal.data("draft-uploading")) {
+        if (window.dou && window.dou.toast) {
+          window.dou.toast.error(typeof lang === "function" ? lang("uploading", "图片上传中，请稍候") : "图片上传中，请稍候");
+        }
+        return;
+      }
+      var initial = $modal.data("draft-initial");
+      var value = draftReadFormValue($modal, $trigger);
+      var fileKind = kind === "image" || kind === "file";
+      var initialNumber = initial && initial.number ? String(initial.number) : "";
+      var currentNumber = value && value.number ? String(value.number) : "";
+      var fileChanged = !!$modal.data("draft-file-changed") || !!$modal.data("draft-file-deleted");
+
+      if (fileKind && !fileChanged && currentNumber === initialNumber) {
+        close();
+        return;
+      }
+      if (!fileKind && kind === "editor" && !draftHasOverride($trigger)
+          && $trigger.attr("data-draft-blank") === "1" && draftHtmlIsBlank(value)) {
+        close();
+        return;
+      }
+      if (!fileKind && !draftHasOverride($trigger) && draftValuesEqual(value, initial)) {
+        close();
+        return;
+      }
+
+      $modal.data("draft-submitted", true);
+      draftWriteValue($trigger, value, $modal);
+      close();
+    });
+  }
+
+  function openDraftLangBox($trigger) {
+    var triggerId = $trigger.attr("data-trigger-id") || "";
+    if (triggerId) {
+      $trigger.attr("id", triggerId);
+    }
+    var initial = draftReadValue($trigger);
+    var aiField = $trigger.attr("data-draft-ai-field") || "";
+    var aiType = $trigger.attr("data-draft-ai-type") || "text";
+    var hasAi = aiField !== "" && draftHasAiTranslate();
+
+    open({
+      title: $trigger.attr("data-title") || "",
+      placement: "right",
+      size: "lg",
+      className: "is-lang is-lang-draft",
+      load: function ($modal, $body, $footer) {
+        $modal.data("draft-initial", initial);
+        var toolbar = hasAi
+          ? '<div class="dou-modal-lang-toolbar"><span class="action ai-lang-translate"></span></div>'
+          : "";
+        $body.html(toolbar + buildDraftLangForm($trigger, initial));
+        // 草稿表单没有 action：编辑器脚本对 document 内 input 的回车会直接 $form.submit()，
+        // 触发浏览器原生提交并整页跳到「当前地址?value=…」。这里统一拦下提交事件，
+        // 回车改由 douModal 的全局 Enter 处理转成「提交」按钮点击。
+        $body.off("submit.draftLang").on("submit.draftLang", "form", function (e) {
+          e.preventDefault();
+        });
+        if (window.douFileImage) {
+          window.douFileImage.init($body[0] || document);
+        }
+        $footer.html(
+          '<div class="dou-modal-actions">' +
+          '<a href="javascript:;" class="btn dou-modal-lang-submit">' +
+          escapeHtml(typeof lang === "function" ? lang("btn_submit") : "提交") +
+          "</a></div>"
+        );
+        bindDraftFileUpload($modal, $trigger);
+        bindDraftFileClear($modal, $trigger);
+        bindDraftLangSubmit($modal, $trigger);
+        if (hasAi) {
+          $(document).trigger("douLangFormReady", {
+            $modal: $modal,
+            $trigger: $trigger,
+            field: aiField,
+            type: aiType,
+          });
+        }
+      },
+    });
+  }
+
+  function handleToggleClick(e) {
+    var $trigger = $(this);
+    var kind = $trigger.attr("data-dou-modal");
+    var target = $trigger.attr("data-dou-target");
+
+    if (kind === "lang") {
+      e.preventDefault();
+      openLangBox($trigger);
+      return;
+    }
+    if (kind === "restore") {
+      e.preventDefault();
+      openRestore($trigger);
+      return;
+    }
+    if (kind === "message") {
+      e.preventDefault();
+      openMessage($trigger);
+      return;
+    }
+    if (target) {
+      e.preventDefault();
+      show(target);
+    }
+  }
+
+  $(document).on("click", '[data-dou-toggle="modal"]', handleToggleClick);
+
+  $(document).on("click", '[data-dou-dismiss="modal"]', function (e) {
+    e.preventDefault();
+    var $modal = $(this).closest(modalSel);
+    if ($modal.length) {
+      hide($modal);
+    } else {
+      close();
+    }
+  });
+
+  /**
+   * 回车提交的控件白名单：只认文本类 input。
+   *
+   * textarea（回车换行）、contenteditable（Vditor 等富文本）、file / checkbox /
+   * radio / date / select 等控件一律放行原行为，避免把「输入」误解成「提交」。
+   *
+   * @param {Element} el 事件目标
+   * @returns {boolean}
+   */
+  function isEnterSubmittable(el) {
+    if (!el || el.nodeType !== 1 || el.tagName !== "INPUT") {
+      return false;
+    }
+    var type = String(el.type || "text").toLowerCase();
+    if (
+      type !== "text" &&
+      type !== "search" &&
+      type !== "email" &&
+      type !== "url" &&
+      type !== "tel" &&
+      type !== "password" &&
+      type !== "number"
+    ) {
+      return false;
+    }
+    return !el.readOnly && !el.disabled;
+  }
+
+  // 通用回车提交：弹窗内有主提交按钮、焦点在文本输入框时，回车等同点主按钮。
+  // 只认 .dou-modal-submit（submitText + onSubmit 型）与 .dou-modal-lang-submit（多语言弹窗）；
+  // buttons 型弹窗（确认框、备份恢复、图片裁剪、Excel 导入等）没有该按钮类，天然不参与。
+  $(document).on("keydown", function (event) {
+    if (event.keyCode !== 13 && event.key !== "Enter") {
+      return;
+    }
+    // jQuery 1.10 的事件对象不会拷贝 isComposing / repeat，必须回到原生事件取
+    var nativeEvent = event.originalEvent || event;
+    // 输入法候选未上屏时回车用于选词；长按回车的重复事件也只处理一次
+    if (nativeEvent.isComposing || event.keyCode === 229 || nativeEvent.repeat) {
+      return;
+    }
+    var $modal = $(event.target).closest(modalSel);
+    if (!$modal.length || $modal.attr("data-dou-no-enter-submit") === "1") {
+      return;
+    }
+    if (!isEnterSubmittable(event.target)) {
+      return;
+    }
+    var $btn = $modal.find(".dou-modal-submit, .dou-modal-lang-submit").first();
+    if (!$btn.length || $btn.hasClass("dou-modal-loading")) {
+      return;
+    }
+    event.preventDefault();
+    $btn.trigger("click");
+  });
+
+  global.douModal = {
+    open: open,
+    show: show,
+    hide: hide,
+    close: close,
+  };
+})(window, jQuery);
+
+/**
+ * 通用气泡提示（douPopover）：参考 Bootstrap Popover 的轻量实现。
+ *
+ * 声明式：
+ *   <i data-dou-toggle="popover" data-title="标题" data-content="说明"
+ *      data-placement="top|right|bottom|left" data-html="1"></i>
+ * 编程式：
+ *   douPopover.show($trigger, {title, content, placement, html});
+ *   douPopover.hide() / toggle($trigger, options) / destroy()
+ *
+ * 单例浮层挂 body + fixed 定位，同一时间只显示一个；点击外部、Esc、滚动或缩放时收起。
+ */
+(function (global, $) {
+  "use strict";
+
+  var GAP = 8; // 气泡与触发元素的间距
+  var EDGE = 8; // 与视口边缘的最小安全距离
+  var ARROW = 8; // 箭头尺寸，需与 common.css 的 .dou-popover-arrow 保持一致
+  var placements = ["top", "right", "bottom", "left"];
+  var flips = { top: "bottom", bottom: "top", left: "right", right: "left" };
+
+  var $popover = null;
+  var $title = null;
+  var $content = null;
+  var $arrow = null;
+  var currentTrigger = null;
+
+  function ensure() {
+    if ($popover) {
+      return $popover;
+    }
+    $popover = $(
+      '<div class="dou-popover" id="dou-popover" role="tooltip">' +
+        '<div class="dou-popover-arrow"></div>' +
+        '<div class="dou-popover-title"></div>' +
+        '<div class="dou-popover-content"></div>' +
+        "</div>"
+    );
+    $title = $popover.find(".dou-popover-title");
+    $content = $popover.find(".dou-popover-content");
+    $arrow = $popover.find(".dou-popover-arrow");
+    $popover.appendTo(document.body);
+    return $popover;
+  }
+
+  // 声明式触发器的取值；data-html="1" 时正文按 HTML 渲染
+  function readOptions($trigger) {
+    var placement = $trigger.attr("data-placement") || "top";
+    if ($.inArray(placement, placements) === -1) {
+      placement = "top";
+    }
+    return {
+      title: $trigger.attr("data-title") || "",
+      content: $trigger.attr("data-content") || "",
+      placement: placement,
+      html: $trigger.attr("data-html") === "1",
+    };
+  }
+
+  function viewport() {
+    return {
+      w: window.innerWidth || document.documentElement.clientWidth,
+      h: window.innerHeight || document.documentElement.clientHeight,
+    };
+  }
+
+  function clamp(value, min, max) {
+    if (max < min) {
+      return min;
+    }
+    return Math.min(Math.max(value, min), max);
+  }
+
+  // 按方向计算左上角坐标（触发元素取 getBoundingClientRect，与 fixed 同属视口坐标系）
+  function measure(rect, size, placement) {
+    var top;
+    var left;
+    if (placement === "top") {
+      top = rect.top - size.h - GAP;
+      left = rect.left + rect.width / 2 - size.w / 2;
+    } else if (placement === "bottom") {
+      top = rect.bottom + GAP;
+      left = rect.left + rect.width / 2 - size.w / 2;
+    } else if (placement === "left") {
+      top = rect.top + rect.height / 2 - size.h / 2;
+      left = rect.left - size.w - GAP;
+    } else {
+      top = rect.top + rect.height / 2 - size.h / 2;
+      left = rect.right + GAP;
+    }
+    return { top: top, left: left };
+  }
+
+  // 主轴溢出则翻到对侧；翻转后仍溢出交给 clamp 夹紧
+  function resolvePlacement(rect, size, placement, vp) {
+    var pos = measure(rect, size, placement);
+    var overflowMain =
+      (placement === "top" && pos.top < EDGE) ||
+      (placement === "bottom" && pos.top + size.h > vp.h - EDGE) ||
+      (placement === "left" && pos.left < EDGE) ||
+      (placement === "right" && pos.left + size.w > vp.w - EDGE);
+
+    if (overflowMain) {
+      placement = flips[placement];
+      pos = measure(rect, size, placement);
+    }
+    return { placement: placement, top: pos.top, left: pos.left };
+  }
+
+  function position($trigger, placement) {
+    var rect = $trigger[0].getBoundingClientRect();
+    var size = { w: $popover.outerWidth(), h: $popover.outerHeight() };
+    var vp = viewport();
+    var resolved = resolvePlacement(rect, size, placement, vp);
+
+    var top = clamp(resolved.top, EDGE, vp.h - size.h - EDGE);
+    var left = clamp(resolved.left, EDGE, vp.w - size.w - EDGE);
+    $popover.css({ top: top + "px", left: left + "px" });
+    $popover
+      .removeClass("dou-popover-top dou-popover-right dou-popover-bottom dou-popover-left")
+      .addClass("dou-popover-" + resolved.placement);
+
+    // 箭头对准触发元素中心；只设置主轴上的偏移，另一轴交给 direction 类定位
+    if (resolved.placement === "top" || resolved.placement === "bottom") {
+      var ax = clamp(rect.left + rect.width / 2 - left - ARROW / 2, 10, size.w - ARROW - 10);
+      $arrow.css({ left: ax + "px", top: "", bottom: "" });
+    } else {
+      var ay = clamp(rect.top + rect.height / 2 - top - ARROW / 2, 10, size.h - ARROW - 10);
+      $arrow.css({ top: ay + "px", left: "", right: "" });
+    }
+  }
+
+  function show($trigger, options) {
+    if (!$trigger || !$trigger.length) {
+      return;
+    }
+    ensure();
+
+    var opts = options || readOptions($trigger);
+    if (!opts.content) {
+      hide();
+      return;
+    }
+
+    if (currentTrigger && currentTrigger[0] !== $trigger[0]) {
+      currentTrigger.removeAttr("aria-describedby");
+    }
+    currentTrigger = $trigger;
+
+    $title.text(opts.title || "").toggle(!!opts.title);
+    if (opts.html) {
+      $content.html(opts.content);
+    } else {
+      $content.text(opts.content);
+    }
+
+    // 先显示再测量，否则 display:none 时取到的宽高为 0
+    $popover.addClass("is-open");
+    $trigger.attr("aria-describedby", "dou-popover");
+    position($trigger, opts.placement || "top");
+  }
+
+  function hide() {
+    if (currentTrigger) {
+      currentTrigger.removeAttr("aria-describedby");
+      currentTrigger = null;
+    }
+    if ($popover) {
+      $popover.removeClass("is-open");
+    }
+  }
+
+  function toggle($trigger, options) {
+    if (
+      currentTrigger &&
+      $trigger &&
+      currentTrigger[0] === $trigger[0] &&
+      $popover &&
+      $popover.hasClass("is-open")
+    ) {
+      hide();
+      return;
+    }
+    show($trigger, options);
+  }
+
+  function destroy() {
+    hide();
+    if ($popover) {
+      $popover.remove();
+      $popover = null;
+      $title = null;
+      $content = null;
+      $arrow = null;
+    }
+  }
+
+  // 声明式：点击触发器开合
+  $(document).on("click", '[data-dou-toggle="popover"]', function (e) {
+    e.preventDefault();
+    toggle($(this));
+  });
+
+  // 点击浮层与触发器之外的区域收起；触发器自身的点击已由上面的委托处理过
+  $(document).on("click", function (e) {
+    if (!currentTrigger) {
+      return;
+    }
+    var target = e.target;
+    if ($popover && ($popover[0] === target || $.contains($popover[0], target))) {
+      return;
+    }
+    if (currentTrigger[0] === target || $.contains(currentTrigger[0], target)) {
+      return;
+    }
+    hide();
+  });
+
+  $(document).on("keydown", function (e) {
+    if (e.key === "Escape" || e.keyCode === 27) {
+      hide();
+    }
+  });
+
+  // 滚动（含内部滚动容器，用捕获阶段）与缩放会改变锚点位置，直接收起避免错位
+  document.addEventListener(
+    "scroll",
+    function () {
+      hide();
+    },
+    true
+  );
+  $(window).on("resize", function () {
+    hide();
+  });
+
+  global.douPopover = {
+    show: show,
+    hide: hide,
+    toggle: toggle,
+    destroy: destroy,
+  };
+})(window, jQuery);
+
+/**
+ * 通用折叠（douCollapse）：声明式开合任意面板（表单高级配置、表格行内详情等）。
+ *
+ * 声明式：
+ *   <a href="javascript:;" class="dou-collapse-toggle"
+ *      data-dou-toggle="collapse" data-dou-target="#panel-id"
+ *      aria-expanded="false"><i class="bi bi-chevron-right"></i> 高级配置</a>
+ *   <div id="panel-id" class="dou-collapse">...</div>
+ *   展开态：面板追加 is-open，收起态由 .dou-collapse:not(.is-open) 隐藏（tr 展开后自然还原 table-row）。
+ * 编程式：
+ *   douCollapse.toggle($trigger) / show($trigger) / hide($trigger) / init(root)
+ *
+ * 约定：
+ *   - data-dou-target 为面板 CSS 选择器，省略时回退触发器 href="#id"；
+ *   - 初始开合以服务端是否渲染 is-open 为准，脚本只处理点击与状态同步；
+ *   - 触发器内 i.bi 箭头随开合在 bi-chevron-down / bi-chevron-right 间切换；
+ *   - AJAX 插入的新触发器无需重新绑定（点击走委托），需要同步图标/aria 时调 init(root)。
+ */
+(function (global, $) {
+  "use strict";
+
+  var ICON_OPEN = "bi-chevron-down";
+  var ICON_CLOSED = "bi-chevron-right";
+
+  function resolvePanel($trigger) {
+    var selector = $trigger.attr("data-dou-target");
+    if (!selector) {
+      var href = $trigger.attr("href") || "";
+      selector = href.charAt(0) === "#" ? href : "";
+    }
+    if (!selector) {
+      return $();
+    }
+    var $panel = $(selector);
+    return $panel.length ? $panel.first() : $();
+  }
+
+  function isOpen($panel) {
+    return $panel.hasClass("is-open");
+  }
+
+  function sync($trigger, open) {
+    $trigger.attr("aria-expanded", open ? "true" : "false");
+    var $icon = $trigger.find("i.bi").first();
+    if ($icon.length) {
+      $icon.toggleClass(ICON_OPEN, open).toggleClass(ICON_CLOSED, !open);
+    }
+  }
+
+  function setOpen($trigger, open) {
+    var $panel = resolvePanel($trigger);
+    if (!$panel.length) {
+      return;
+    }
+    $panel.toggleClass("is-open", open);
+    sync($trigger, open);
+  }
+
+  function toggle($trigger) {
+    var $panel = resolvePanel($trigger);
+    if (!$panel.length) {
+      return;
+    }
+    setOpen($trigger, !isOpen($panel));
+  }
+
+  function show($trigger) {
+    setOpen($trigger, true);
+  }
+
+  function hide($trigger) {
+    setOpen($trigger, false);
+  }
+
+  function init(root) {
+    $(root || document)
+      .find('[data-dou-toggle="collapse"]')
+      .each(function () {
+        var $trigger = $(this);
+        var $panel = resolvePanel($trigger);
+        if ($panel.length) {
+          sync($trigger, isOpen($panel));
+        }
+      });
+  }
+
+  $(document).on("click", '[data-dou-toggle="collapse"]', function (e) {
+    e.preventDefault();
+    toggle($(this));
+  });
+
+  $(function () {
+    init(document);
+  });
+
+  global.douCollapse = {
+    toggle: toggle,
+    show: show,
+    hide: hide,
+    init: init,
+  };
+})(window, jQuery);
+
+/**
+ * 图片编辑模块（上传后裁剪）：对已上传的图片（相册列表项 / 单图字段已保存图）弹窗裁剪，
+ * 导出结果提交 admin.file.crop 替换原文件（路径不变，前台引用零影响）。
+ *
+ * 依赖 cropperjs v1：js/cropper.min.js 与 css/cropper.min.css 由使用图片字段的页面
+ * 模板直接引用（参考 ai.htm 对 ai.css / ai.js 的引用方式，AdminPrefilter 编译期重写路径）；
+ * 未引入插件的页面编辑入口不生效。EXIF 方向由 cropperjs 内置 checkOrientation 矫正。
+ *
+ * 输出策略：扩展名跟随原图（.png → PNG，.jpg/.jpeg → JPEG），路径与文件名保持不变。
+ * 弹窗工具栏宽、高输入框为最终导出尺寸的唯一来源：打开时按配置尺寸（data-crop-ratio 整数对）预填，
+ * 确认时严格按框内宽高导出（原图大则裁小、原图小则拉大）；输入框为空时回退选区尺寸按 site.image_width 封顶。
+ *
+ * 选区布局：打开 / 切换比例 / 重置三个时机统一按「该比例在当前可见图片区域内的最大内接矩形 + 双轴居中」
+ * 摆放选区（图片总是填满选区，比例与图片比例决定哪一边吃满）；自由比例时选区为可见图片区域整块。
+ *
+ * 对外接口：
+ *   douCrop.editableExt(src)  URL 是否为可编辑图片扩展（jpg/jpeg/png/webp）
+ *   douCrop.editableFile(file)  本地 File 是否为可编辑图片
+ *   douCrop.edit(src, ratioValue, callback)
+ *     - src        已上传图片的 URL
+ *     - ratioValue 初始宽高比（"1920/400"、"1.3333"；整数对且非 1:1/4:3/16:9 时作为末项精确比例；
+ *       整数对同时作为宽/高输入框的预设尺寸）
+ *     - callback(blob|null)  裁剪产物（扩展名与原图一致）；取消/失败回传 null
+ *   douCrop.editFile(file, ratioValue, callback, exportExt, options)
+ *     - file       本地 File（选图后、提交前裁剪）
+ *     - exportExt  可选，覆盖导出扩展名（换图时与原附件扩展名对齐）
+ *     - options    可选 {outputWidth, maxEdge}
+ *     - 其余同 edit；未传 exportExt 时导出 MIME 跟文件名/类型
+ */
+(function (global, $) {
+  "use strict";
+
+  var JPEG_QUALITY = 0.85;
+
+  // 宽/高输入框与导出的 sanity 上限（防画布爆炸）；配置尺寸与用户输入不受 site.image_width 封顶
+  var HARD_MAX = 8000;
+
+  // 输出最长边上限：来自后台设置 site.image_width（javascript.tpl 输出），未配置取 1000
+  function maxEdge() {
+    var v = parseInt(global.dou_crop_max_edge, 10);
+    return isFinite(v) && v > 0 ? v : 1000;
+  }
+
+  // 预设比例：自由 / 1:1 / 4:3 / 16:9（data-ratio 空串 = 自由）
+  var RATIO_PRESETS = [
+    { key: "", labelKey: "crop_ratio_free", fallback: "自由" },
+    { key: "1", label: "1:1" },
+    { key: "1.3333", label: "4:3" },
+    { key: "1.7778", label: "16:9" },
+  ];
+
+  function tr(key, fallback) {
+    return typeof lang === "function" ? lang(key, fallback) : fallback;
+  }
+
+  // 裁剪弹窗自身样式（内联注入；cropper.min.css / cropper.min.js 由页面模板引入）
+  function injectStyle() {
+    if (!$("#dou-crop-style").length) {
+      $(
+        '<style id="dou-crop-style">'
+          + ".dou-crop{width:100%}"
+          + ".dou-crop-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}"
+          + ".dou-crop-ratios,.dou-crop-ops{display:flex;align-items:center;flex-wrap:wrap;gap:4px}"
+          + ".dou-crop-ratios .dou-crop-label{font-size:12px;color:#889;margin-right:2px}"
+          + ".dou-crop-size{display:flex;align-items:center;flex-wrap:wrap;gap:6px}"
+          + ".dou-crop-size-x{font-size:12px;color:#889}"
+          + ".dou-crop-outw{font-size:12px;color:#889;display:inline-flex;align-items:center;gap:4px}"
+          + ".dou-crop-outw input{width:64px;height:26px;padding:0 6px;border:1px solid #d9dce3;border-radius:3px;box-sizing:border-box;font-size:12px;line-height:24px;text-align:center;color:#334;background:#f3f4f6;vertical-align:middle}"
+          + ".dou-crop-outw input[type=number]::-webkit-inner-spin-button,.dou-crop-outw input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}"
+          + ".dou-crop-outw input[type=number]{-moz-appearance:textfield;appearance:textfield}"
+          + ".dou-crop-toolbar a{padding:3px 10px;border:1px solid #d9dce3;border-radius:3px;font-size:12px;color:#556;text-decoration:none;cursor:pointer;display:inline-block;line-height:1.6}"
+          + ".dou-crop-toolbar a:hover{border-color:#2d6cdf;color:#2d6cdf}"
+          + ".dou-crop-toolbar a.active{background:#2d6cdf;border-color:#2d6cdf;color:#fff}"
+          + ".dou-crop-stage{height:420px;max-height:60vh;background:#f3f4f6;overflow:hidden}"
+          + ".dou-crop-stage img{display:block;max-width:100%}"
+          + "</style>"
+      ).appendTo("head");
+    }
+  }
+
+  /**
+   * URL 是否为可编辑图片：按扩展名判断（jpg/jpeg/png/webp）。
+   * gif（动图裁剪丢帧）、bmp、svg 不提供编辑。
+   */
+  function editableExt(src) {
+    var m = String(src || "").split("?")[0].match(/\.([a-z0-9]+)$/i);
+    return !!m && /^(jpe?g|png|webp)$/i.test(m[1]);
+  }
+
+  /**
+   * 本地 File 的可编辑扩展：优先文件名，其次 MIME。
+   */
+  function fileExt(file) {
+    var name = file && file.name ? String(file.name) : "";
+    var m = name.split("?")[0].match(/\.([a-z0-9]+)$/i);
+    if (m && /^(jpe?g|png|webp)$/i.test(m[1])) {
+      return m[1].toLowerCase();
+    }
+    var type = file && file.type ? String(file.type).toLowerCase() : "";
+    if (type === "image/png") {
+      return "png";
+    }
+    if (type === "image/webp") {
+      return "webp";
+    }
+    if (type === "image/jpeg") {
+      return "jpg";
+    }
+    return "";
+  }
+
+  function editableFile(file) {
+    return fileExt(file) !== "";
+  }
+
+  /**
+   * 解析比例值："200/150"、"1.3333" → 数值；非法或非正值 → NaN（自由比例）。
+   */
+  function parseRatio(value) {
+    if (value == null) {
+      return NaN;
+    }
+    var parts = String(value).split("/");
+    var w = parseFloat(parts[0]);
+    var h = parts.length > 1 ? parseFloat(parts[1]) : NaN;
+    var ratio = parts.length > 1 ? w / h : w;
+    return isFinite(ratio) && ratio > 0 ? ratio : NaN;
+  }
+
+  /**
+   * 比例落在 1:1 / 4:3 / 16:9 时返回对应 data-ratio，否则返回空串。
+   *
+   * @param {number} ratio
+   * @return {string}
+   */
+  function matchPresetKey(ratio) {
+    if (!(isFinite(ratio) && ratio > 0)) {
+      return "";
+    }
+    var i;
+    for (i = 0; i < RATIO_PRESETS.length; i++) {
+      var preset = RATIO_PRESETS[i];
+      if (preset.key === "") {
+        continue;
+      }
+      var presetRatio = parseRatio(preset.key);
+      if (isFinite(presetRatio) && Math.abs(presetRatio - ratio) < 0.01) {
+        return preset.key;
+      }
+    }
+    return "";
+  }
+
+  /**
+   * 整数对 "1920/400"。
+   *
+   * @param {string} ratioValue
+   * @return {{key:string,label:string,width:number,height:number}|null}
+   */
+  function integerPairFromRatioValue(ratioValue) {
+    var parts = String(ratioValue == null ? "" : ratioValue).split("/");
+    if (parts.length !== 2) {
+      return null;
+    }
+    var rawW = String(parts[0]).trim();
+    var rawH = String(parts[1]).trim();
+    if (!/^\d+$/.test(rawW) || !/^\d+$/.test(rawH)) {
+      return null;
+    }
+    var w = parseInt(rawW, 10);
+    var h = parseInt(rawH, 10);
+    if (w <= 0 || h <= 0) {
+      return null;
+    }
+    return { key: w + "/" + h, label: w + ":" + h, width: w, height: h };
+  }
+
+  /**
+   * 整数对且对不上 1:1 / 4:3 / 16:9 时，作为工具栏末项精确比例。
+   *
+   * @param {string} ratioValue
+   * @return {{key:string,label:string,width:number,height:number}|null}
+   */
+  function extraPresetFromRatioValue(ratioValue) {
+    var pair = integerPairFromRatioValue(ratioValue);
+    if (!pair || matchPresetKey(pair.width / pair.height) !== "") {
+      return null;
+    }
+    return pair;
+  }
+
+  function ratioPresetsFor(ratioValue) {
+    var presets = RATIO_PRESETS.slice();
+    var extra = extraPresetFromRatioValue(ratioValue);
+    if (extra) {
+      presets.push({ key: extra.key, label: extra.label });
+    }
+    return presets;
+  }
+
+  function activateRatioButton($m, ratio) {
+    var key = "";
+    $m.find(".dou-crop-ratios a").each(function () {
+      var k = $(this).attr("data-ratio");
+      if (k === "") {
+        return;
+      }
+      var r = parseRatio(k);
+      if (isFinite(r) && isFinite(ratio) && Math.abs(r - ratio) < 0.01) {
+        key = k;
+      }
+    });
+    $m.find(".dou-crop-ratios a").removeClass("active");
+    $m.find('.dou-crop-ratios a[data-ratio="' + key + '"]').addClass("active");
+  }
+
+  /**
+   * 把目标宽高收到原图与最长边上限之内，保持比例。
+   *
+   * @param {number} w
+   * @param {number} h
+   * @param {number} edgeCap
+   * @param {{naturalWidth:number,naturalHeight:number}|null} imageData
+   * @return {{width:number,height:number}|null}
+   */
+  function clampExportSize(w, h, edgeCap, imageData) {
+    if (!(isFinite(w) && w > 0 && isFinite(h) && h > 0)) {
+      return null;
+    }
+    var maxW = edgeCap;
+    var maxH = edgeCap;
+    if (imageData && imageData.naturalWidth > 0 && imageData.naturalHeight > 0) {
+      maxW = Math.min(maxW, imageData.naturalWidth);
+      maxH = Math.min(maxH, imageData.naturalHeight);
+    }
+    var scale = 1;
+    if (w > maxW) {
+      scale = Math.min(scale, maxW / w);
+    }
+    if (h > maxH) {
+      scale = Math.min(scale, maxH / h);
+    }
+    return {
+      width: Math.max(1, Math.round(w * scale)),
+      height: Math.max(1, Math.round(h * scale)),
+    };
+  }
+
+  function buildToolbarHtml(ratioValue) {
+    var html = '<div class="dou-crop-toolbar"><div class="dou-crop-ratios">';
+    html += '<span class="dou-crop-label">' + tr("crop_ratio_label", "比例") + "</span>";
+    var presets = ratioPresetsFor(ratioValue);
+    var extra = extraPresetFromRatioValue(ratioValue);
+    var activeKey = extra ? extra.key : matchPresetKey(parseRatio(ratioValue));
+    for (var i = 0; i < presets.length; i++) {
+      var preset = presets[i];
+      var label = preset.labelKey ? tr(preset.labelKey, preset.fallback) : preset.label;
+      var active = preset.key === activeKey ? " active" : "";
+      html += '<a href="javascript:;" data-ratio="' + preset.key + '" class="' + active.replace(" ", "") + '">' + label + "</a>";
+    }
+    html += '</div><div class="dou-crop-size">';
+    html += '<label class="dou-crop-outw" title="' + tr("crop_size_width", "宽度") + '"><input type="number" class="dou-crop-width" min="1" max="' + HARD_MAX + '" placeholder="' + tr("crop_size_width", "宽度") + '"></label>';
+    html += '<span class="dou-crop-size-x">×</span>';
+    html += '<label class="dou-crop-outw" title="' + tr("crop_size_height", "高度") + '"><input type="number" class="dou-crop-height" min="1" max="' + HARD_MAX + '" placeholder="' + tr("crop_size_height", "高度") + '"></label>';
+    html += '<span class="dou-crop-size-x">px</span>';
+    html += '</div><div class="dou-crop-ops">';
+    html += '<a href="javascript:;" data-op="left">' + tr("crop_rotate_left", "向左旋转") + "</a>";
+    html += '<a href="javascript:;" data-op="flip">' + tr("crop_flip", "左右翻转") + "</a>";
+    html += '<a href="javascript:;" data-op="reset">' + tr("crop_reset", "重置") + "</a>";
+    html += "</div></div>";
+    html += '<div class="dou-crop-stage"><img alt=""></div>';
+    return html;
+  }
+
+  function edit(src, ratioValue, callback) {
+    injectStyle();
+    if (!global.Cropper || !global.douModal || !editableExt(src)) {
+      callback(null);
+      return;
+    }
+    openEditModal(src, ratioValue, callback, "", "", {});
+  }
+
+  function editFile(file, ratioValue, callback, exportExt, options) {
+    injectStyle();
+    if (!global.Cropper || !global.douModal || !editableFile(file)) {
+      callback(null);
+      return;
+    }
+    var objectUrl = URL.createObjectURL(file);
+    var ext = exportExt || fileExt(file) || "jpg";
+    openEditModal(objectUrl, ratioValue, callback, ext, objectUrl, options || {});
+  }
+
+  /**
+   * 选区布局：按指定比例在「当前可见图片区域」内求最大内接矩形并双轴居中（图片总是填满选区）。
+   *
+   * 在 canvas 空间计算：getCanvasData 天然是旋转后包围盒与缩放后绘制矩形，任意角度旋转 / zoom 后均统一正确；
+   * 可用区 = 画布矩形 ∩ 容器矩形（缩放超出容器时取可见部分）；比例决定哪一边吃满：
+   * 图更宽（画布比例 > 目标比例）时高度吃满，否则宽度吃满。自由比例（NaN）选区为可用区整块。
+   *
+   * @param {Cropper} cropper
+   * @param {number} ratio 目标宽高比（NaN 表示自由比例）
+   */
+  function fitCropBoxToRatio(cropper, ratio) {
+    if (!cropper) {
+      return;
+    }
+    try {
+      var canvas = cropper.getCanvasData();
+      var container = cropper.getContainerData();
+      if (!canvas || !container || canvas.width <= 0 || canvas.height <= 0) {
+        return;
+      }
+      var left = Math.max(canvas.left, 0);
+      var top = Math.max(canvas.top, 0);
+      var right = Math.min(canvas.left + canvas.width, container.width);
+      var bottom = Math.min(canvas.top + canvas.height, container.height);
+      var aw = right - left;
+      var ah = bottom - top;
+      if (aw <= 0 || ah <= 0) {
+        return;
+      }
+      var w = aw;
+      var h = ah;
+      if (isFinite(ratio) && ratio > 0) {
+        h = w / ratio;
+        if (h > ah) {
+          h = ah;
+          w = h * ratio;
+        }
+      }
+      var cx = (left + right) / 2;
+      var cy = (top + bottom) / 2;
+      cropper.setCropBoxData({
+        left: cx - w / 2,
+        top: cy - h / 2,
+        width: w,
+        height: h,
+      });
+    } catch (e) {
+      /* noop */
+    }
+  }
+
+  /**
+   * 把画布中心对齐到选区中心，使旋转绕画面中心进行。
+   *
+   * @param {Cropper} cropper
+   */
+  function alignCanvasToCropCenter(cropper) {
+    if (!cropper) {
+      return;
+    }
+    try {
+      var crop = cropper.getCropBoxData();
+      var canvas = cropper.getCanvasData();
+      if (!crop || !canvas || crop.width <= 0 || canvas.width <= 0) {
+        return;
+      }
+      cropper.setCanvasData({
+        left: canvas.left + (crop.left + crop.width / 2) - (canvas.left + canvas.width / 2),
+        top: canvas.top + (crop.top + crop.height / 2) - (canvas.top + canvas.height / 2),
+      });
+    } catch (e) {
+      /* noop */
+    }
+  }
+
+  function openEditModal(src, ratioValue, callback, exportExt, objectUrl, options) {
+    var settled = false;
+    var processing = false;
+    var cropper = null;
+    var $modal = null;
+    options = options || {};
+    var initialRatio = parseRatio(ratioValue);
+    var pixelPair = integerPairFromRatioValue(ratioValue);
+    var outputWidth = parseInt(options.outputWidth, 10) || 0;
+    var edgeCap = parseInt(options.maxEdge, 10);
+    if (!isFinite(edgeCap) || edgeCap <= 0) {
+      edgeCap = maxEdge();
+    }
+    if (outputWidth > edgeCap) {
+      edgeCap = outputWidth;
+    }
+    if (pixelPair) {
+      edgeCap = Math.max(edgeCap, pixelPair.width, pixelPair.height);
+    }
+    var currentRatio = initialRatio;
+
+    // 兜底：X / ESC 关闭弹窗不经按钮回调，轮询 DOM 移除后按取消结算
+    var timer = setInterval(function () {
+      if ($modal && $modal.length && !document.contains($modal[0])) {
+        settle(null);
+      }
+    }, 400);
+
+    function settle(result) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearInterval(timer);
+      if (cropper) {
+        try {
+          cropper.destroy();
+        } catch (e) {
+          /* noop */
+        }
+        cropper = null;
+      }
+      if (objectUrl) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch (e) {
+          /* noop */
+        }
+      }
+      callback(result);
+    }
+
+    function exportCanvas(done) {
+      if (processing || !cropper) {
+        return;
+      }
+      processing = true;
+
+      // 导出：宽/高输入框为唯一来源——按框内尺寸原样导出（仅受 HARD_MAX sanity 封顶）；
+      // 输入框为空时回退选区尺寸按 edgeCap 封顶
+      var outW = parseInt($modal.find(".dou-crop-width").val(), 10);
+      var outH = parseInt($modal.find(".dou-crop-height").val(), 10);
+      var sized = clampExportSize(outW, outH, HARD_MAX, null);
+      var canvasOpts;
+      if (sized) {
+        canvasOpts = {
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: "high",
+          width: sized.width,
+          height: sized.height,
+        };
+      } else {
+        canvasOpts = {
+          imageSmoothingEnabled: true,
+          imageSmoothingQuality: "high",
+          maxWidth: edgeCap,
+          maxHeight: edgeCap,
+        };
+      }
+
+      var canvas = null;
+      try {
+        canvas = cropper.getCroppedCanvas(canvasOpts);
+      } catch (e) {
+        canvas = null;
+      }
+      // cropperjs 导出时保持选区比例（自由模式下选区比例可与框内比例不一致）；
+      // 输入框为唯一尺寸来源，不一致时按框内尺寸精确重绘（拉伸由用户手改尺寸自担）
+      if (canvas && sized && (canvas.width !== sized.width || canvas.height !== sized.height)) {
+        var exact = document.createElement("canvas");
+        exact.width = sized.width;
+        exact.height = sized.height;
+        var exactCtx = exact.getContext("2d");
+        if (exactCtx) {
+          exactCtx.imageSmoothingEnabled = true;
+          exactCtx.imageSmoothingQuality = "high";
+          exactCtx.drawImage(canvas, 0, 0, sized.width, sized.height);
+          canvas = exact;
+        }
+      }
+      if (!canvas || !canvas.toBlob) {
+        try {
+          settle(null);
+        } finally {
+          done();
+        }
+        return;
+      }
+
+      // 输出类型跟随原图扩展（路径与文件名保持不变），PNG 保留透明
+      var srcExt = exportExt || (String(src).split("?")[0].match(/\.([a-z0-9]+)$/i) || [])[1] || "jpg";
+      srcExt = String(srcExt).toLowerCase();
+      var type = "image/jpeg";
+      if (srcExt === "png") {
+        type = "image/png";
+      } else if (srcExt === "webp") {
+        type = "image/webp";
+      }
+      canvas.toBlob(
+        function (blob) {
+          // 业务回调抛异常也不能卡住弹窗：done 必须结算（douModal 依赖它关窗）
+          try {
+            settle(blob || null);
+          } finally {
+            done();
+          }
+        },
+        type,
+        type === "image/jpeg" ? JPEG_QUALITY : undefined
+      );
+    }
+
+    $modal = global.douModal.open({
+      title: tr("crop_title", "图片裁剪"),
+      size: "lg",
+      width: 720,
+      closeOnOverlay: false,
+      stack: true,
+      // 宽高输入框回车不应直接「确认裁剪」并覆盖原图
+      noEnterSubmit: true,
+      bodyHtml: buildToolbarHtml(ratioValue),
+      onOpen: function ($m) {
+        var $img = $m.find(".dou-crop-stage img");
+        $img.attr("src", src);
+        $img.on("error", function () {
+          settle(null);
+          global.douModal.hide($m);
+        });
+        cropper = new global.Cropper($img[0], {
+          // 画布可超出舞台：宽幅图 90° 旋转时保持原缩放，才能绕选区中心转并转回
+          viewMode: 0,
+          dragMode: "move",
+          autoCropArea: 1,
+          checkOrientation: true,
+          rotatable: true,
+          scalable: true,
+          aspectRatio: initialRatio,
+          ready: function () {
+            // cropperjs 的 ready 回调 this 指向 img 元素，实例挂在 element.cropper 上
+            var instance = this.cropper || this;
+            fitCropBoxToRatio(instance, initialRatio);
+            prefillSizeInputs($m, instance);
+          },
+        });
+
+        // 一次性预填：配置整数对优先；无配置时取初始选区像素；之后输入框不再被选区回写
+        var sizePrefilled = false;
+        function prefillSizeInputs($host, cropperInstance) {
+          if (sizePrefilled) {
+            return;
+          }
+          sizePrefilled = true;
+          var w = 0;
+          var h = 0;
+          if (pixelPair) {
+            w = pixelPair.width;
+            h = pixelPair.height;
+          } else {
+            try {
+              var initData = cropperInstance.getData(true);
+              w = Math.round(initData.width);
+              h = Math.round(initData.height);
+            } catch (e) {
+              w = 0;
+              h = 0;
+            }
+          }
+          if (w > 0 && h > 0) {
+            $host.find(".dou-crop-width").val(w);
+            $host.find(".dou-crop-height").val(h);
+          }
+        }
+
+        function applySizeFromInputs(changedEl) {
+          if (!cropper) {
+            return;
+          }
+          var ratioKey = $m.find(".dou-crop-ratios a.active").attr("data-ratio");
+          var lockedRatio = parseRatio(ratioKey);
+          var w = parseInt($m.find(".dou-crop-width").val(), 10);
+          var h = parseInt($m.find(".dou-crop-height").val(), 10);
+          var changedIsWidth = changedEl && $(changedEl).hasClass("dou-crop-width");
+          var parts;
+          var rw;
+          var rh;
+          if (isFinite(lockedRatio) && lockedRatio > 0) {
+            parts = String(ratioKey || "").split("/");
+            rw = parts.length === 2 ? parseFloat(parts[0]) : NaN;
+            rh = parts.length === 2 ? parseFloat(parts[1]) : NaN;
+            if (changedIsWidth && isFinite(w) && w > 0) {
+              if (isFinite(rw) && isFinite(rh) && rw > 0) {
+                h = Math.max(1, Math.round((w * rh) / rw));
+              } else {
+                h = Math.max(1, Math.round(w / lockedRatio));
+              }
+            } else if (isFinite(h) && h > 0) {
+              if (isFinite(rw) && isFinite(rh) && rh > 0) {
+                w = Math.max(1, Math.round((h * rw) / rh));
+              } else {
+                w = Math.max(1, Math.round(h * lockedRatio));
+              }
+            }
+          }
+          // 输入框为唯一来源：联动结果仅受 HARD_MAX sanity 约束，允许大于原图尺寸（放大场景）
+          var sized = clampExportSize(w, h, HARD_MAX, null);
+          if (!sized) {
+            return;
+          }
+          $m.find(".dou-crop-width").val(sized.width);
+          $m.find(".dou-crop-height").val(sized.height);
+          try {
+            var data = cropper.getData();
+            cropper.setData({
+              x: data.x,
+              y: data.y,
+              width: sized.width,
+              height: sized.height,
+            });
+          } catch (e2) {
+            /* noop */
+          }
+        }
+
+        $m.on("blur", ".dou-crop-width, .dou-crop-height", function () {
+          applySizeFromInputs(this);
+        });
+        $m.on("change", ".dou-crop-width, .dou-crop-height", function () {
+          applySizeFromInputs(this);
+        });
+        $m.on("click", ".dou-crop-ratios a", function () {
+          var $a = $(this);
+          $a.closest(".dou-crop-ratios").find("a").removeClass("active");
+          $a.addClass("active");
+          var v = parseRatio($a.attr("data-ratio"));
+          currentRatio = isFinite(v) && v > 0 ? v : NaN;
+          if (!cropper) {
+            return;
+          }
+          cropper.setAspectRatio(currentRatio);
+          // 选区按新比例在可见图片区域内最大内接 + 双轴居中（图片填满选区）
+          fitCropBoxToRatio(cropper, currentRatio);
+          // 比例切换：输入框保持宽度、按新比例重算高度；自由比例不动输入框
+          if (isFinite(currentRatio) && currentRatio > 0) {
+            var ratioWidth = parseInt($m.find(".dou-crop-width").val(), 10);
+            if (ratioWidth > 0) {
+              $m.find(".dou-crop-height").val(Math.max(1, Math.round(ratioWidth / currentRatio)));
+            }
+          }
+        });
+        $m.on("click", ".dou-crop-ops a", function () {
+          if (!cropper) {
+            return;
+          }
+          var op = $(this).attr("data-op");
+          if (op === "left") {
+            cropper.rotate(-90);
+            alignCanvasToCropCenter(cropper);
+          } else if (op === "flip") {
+            var data = cropper.getData();
+            var scaleX = data && isFinite(data.scaleX) ? data.scaleX : 1;
+            cropper.scaleX(scaleX > 0 ? -1 : 1);
+          } else if (op === "reset") {
+            currentRatio = initialRatio;
+            activateRatioButton($m, initialRatio);
+            cropper.reset();
+            if (cropper.setAspectRatio) {
+              cropper.setAspectRatio(currentRatio);
+            }
+            sizePrefilled = false;
+            setTimeout(function () {
+              fitCropBoxToRatio(cropper, currentRatio);
+              prefillSizeInputs($m, cropper);
+            }, 0);
+          }
+        });
+      },
+      buttons: [
+        {
+          text: tr("crop_cancel", "取消"),
+          className: "btn",
+          onClick: function (host, done) {
+            settle(null);
+            done();
+          },
+        },
+      ]
+        .concat(
+          typeof options.onRegenerate === "function"
+            ? [
+                {
+                  text: tr("ai_image_regenerate", "重新生成"),
+                  className: "btn",
+                  onClick: function (host, done) {
+                    settle(null);
+                    done();
+                    options.onRegenerate();
+                  },
+                },
+              ]
+            : []
+        )
+        .concat([
+          {
+            text: tr("crop_confirm", "确认裁剪"),
+            className: "btn btn-primary",
+            onClick: function (host, done) {
+              exportCanvas(done);
+            },
+          },
+        ]),
+    });
+  }
+
+  global.douCrop = {
+    editableExt: editableExt,
+    editableFile: editableFile,
+    edit: edit,
+    editFile: editFile,
+  };
+})(window, jQuery);
+
+/**
+ +----------------------------------------------------------
+ * 穿梭框（.transfer）
+ +----------------------------------------------------------
+ * 左右双栏勾选互移的通用组件，布局参考 layui transfer。
+ * 结构：根容器标记 data-dou-transfer，内两个 .transfer-box（各含 .transfer-header 标题与 .transfer-data 列表），
+ * 中间的 .transfer-active 按钮列由组件自动生成；列表项 .transfer-item 内含 checkbox
+ * （value 为提交值），可穿插 .transfer-group 分组标题（组内项全部移至右栏时自动隐藏）。
+ * 初始已选：左栏项标记 data-selected，初始化时自动移至右栏。
+ * 提交值：容器设置 data-name（如 model_ids[]）时，右栏内容实时同步为同名隐藏域。
+ */
+function initTransfer(elem) {
+  var $box = $(elem);
+  if ($box.data("inited")) {
+    return;
+  }
+  $box.data("inited", true);
+
+  var $boxes = $box.children(".transfer-box");
+  if ($boxes.length < 2) {
+    return;
+  }
+  var $leftData = $boxes.first().find(".transfer-data");
+  var $rightData = $boxes.last().find(".transfer-data");
+
+  // 中间互移按钮列（容器已有 .transfer-active 时不再生成）
+  if (!$box.children(".transfer-active").length) {
+    $boxes.first().after(
+      '<div class="transfer-active">' +
+        '<button type="button" class="transfer-btn" data-to="right">&gt;</button>' +
+        '<button type="button" class="transfer-btn" data-to="left">&lt;</button>' +
+        "</div>"
+    );
+  }
+
+  // 记录每个选项所属分组（其前面最近的 .transfer-group，存 DOM 引用）
+  var group = null;
+  $leftData.children("li").each(function () {
+    if ($(this).hasClass("transfer-group")) {
+      group = this;
+    } else if (group) {
+      $(this).data("group", group);
+    }
+  });
+
+  // 分组标题显隐：组内选项全部移至右栏时隐藏
+  function updateGroups() {
+    $leftData.children(".transfer-group").each(function () {
+      var title = this;
+      var hasItem = false;
+      $leftData.children(".transfer-item").each(function () {
+        if ($(this).data("group") === title && !$(this).hasClass("transfer-hide")) {
+          hasItem = true;
+          return false;
+        }
+      });
+      $(title).toggleClass("transfer-hide", !hasItem);
+    });
+  }
+
+  // 右栏内容同步为隐藏域（容器 data-name 存在时）
+  function syncValues() {
+    var name = $box.data("name");
+    var $holder = $box.children(".transfer-values");
+    if (!name) {
+      $holder.remove();
+      return;
+    }
+    if (!$holder.length) {
+      $holder = $("<span></span>").addClass("transfer-values").appendTo($box);
+    }
+    $holder.empty();
+    $rightData.children(".transfer-item").each(function () {
+      $holder.append($("<input>").attr("type", "hidden").attr("name", name).val($(this).find("input").val()));
+    });
+  }
+
+  // 左栏项移至右栏：隐藏左栏原项（保留分组位置），右栏追加副本
+  function toRight($li) {
+    $li.addClass("transfer-hide").find("input").prop("checked", false);
+    $li.clone().removeClass("transfer-hide").appendTo($rightData);
+  }
+
+  // 初始已选项移至右栏
+  $leftData.children(".transfer-item[data-selected]").each(function () {
+    toRight($(this));
+  });
+  updateGroups();
+  syncValues();
+
+  // 互移按钮：把当前栏勾选项移动到另一栏
+  $box.on("click", ".transfer-btn", function () {
+    var rightward = $(this).attr("data-to") === "right";
+    var $from = rightward ? $leftData : $rightData;
+    $from.children(".transfer-item").each(function () {
+      var $li = $(this);
+      if ($li.hasClass("transfer-hide") || !$li.find("input").prop("checked")) {
+        return;
+      }
+      if (rightward) {
+        toRight($li);
+      } else {
+        // 右栏项移回左栏：按 checkbox value 恢复左栏对应项
+        var value = $li.find("input").val();
+        $leftData.children(".transfer-item").each(function () {
+          var $item = $(this);
+          if ($item.hasClass("transfer-hide") && $item.find("input").val() === value) {
+            $item.removeClass("transfer-hide");
+          }
+        });
+        $li.remove();
+      }
+    });
+    updateGroups();
+    syncValues();
+  });
+}
+
+// 根标记 data-dou-transfer 驱动初始化；douTransfer.init(root) 供 AJAX 局部刷新后重入
+function initTransferScope(root) {
+  var $scope = $(root || document);
+  var $roots = $scope.find("[data-dou-transfer]");
+  if ($scope.is("[data-dou-transfer]")) {
+    $roots = $roots.add($scope);
+  }
+  $roots.each(function () {
+    initTransfer(this);
+  });
+}
+
+window.douTransfer = { init: initTransferScope };
+
+$(function () {
+  initTransferScope(document);
+});
+
+/**
+ * 扩展字段：语言面板切换 + 非默认语言「继承默认」时禁用控件。
+ */
+$(function () {
+  function syncMetadataInherit($field) {
+    var $switch = $field.find(".metadata-inherit");
+    if (!$switch.length) {
+      return;
+    }
+    var inherited = $switch.prop("checked");
+    $field.toggleClass("metadata-inherited", inherited);
+    $field.find(".metadata-control").find("input, select, textarea, button").prop("disabled", inherited);
+    $field.find(".metadata-control").find(".editor-class").attr("contenteditable", inherited ? "false" : "true");
+  }
+
+  $("[data-dou-metadata-field]").each(function () {
+    syncMetadataInherit($(this));
+  });
+
+  $(document).on("change", ".metadata-inherit", function () {
+    syncMetadataInherit($(this).closest("[data-dou-metadata-field]"));
+  });
+});

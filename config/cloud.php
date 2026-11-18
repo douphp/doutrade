@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * DouPHP
+ * ------------------------------------------------------------------------------------
+ * 版权所有 2013-2026 漳州豆壳网络科技有限公司，并保留所有权利。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * 这不是一个自由软件！您只能在遵守授权协议前提下对程序代码进行修改和使用；
+ * 不允许对程序代码以任何形式任何目的的再发布。
+ * 授权协议：http://www.douphp.com/license.html
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-04
+ */
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 主站与豆壳云服务 API（api.douphp.com）对接的唯一配置点。
+ *
+ * 推荐生产值：`https://api.douphp.com`（末尾不带斜杠，由 CloudApi 内部统一拼接）。
+ * 若留空或未配置该项：主站不向云服务发起请求（CloudApi 返回空 URL / null），在线安装等不可用。
+ *
+ * 所有路径常量集中在 \Dou\Core\Web\Http\CloudApi，请使用其方法获取最终 URL。
+ */
+return [
+    'cloud' => [
+        // 云服务 API 基础地址（无末尾斜杠）。本地开发可按需修改。
+        'api_base' => 'https://api.douphp.com',
+        // 下载白名单：仅用于校验 install-resolve 返回的 download_url（host 必须一致；协议允许 http/https
+        // 过渡并存），不参与本地拼 URL。包完整性由 install-resolve 下发的 sha256 强校验兜底。
+        'download_base' => 'https://download.douphp.com',
+        // 站点安装/升级记录上报开关（匿名基础遥测）。默认开启；置 false 可关闭上报，
+        // 关闭后 SiteReportService 静默跳过，不影响任何安装/升级流程。
+        'report_site' => true,
+    ],
+];

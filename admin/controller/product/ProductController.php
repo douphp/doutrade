@@ -1,0 +1,401 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Admin\Controller\Product;
+
+use Dou\Admin\Controller\BaseController;
+use Dou\Admin\Controller\Concerns\QuickEditable;
+use Dou\Admin\Model\Product\Product;
+use Dou\Admin\Model\Product\ProductCategory;
+use Dou\Admin\Request\Product\ProductActionFormRequest;
+use Dou\Admin\Request\Product\ProductFormRequest;
+use Dou\Admin\Service\Metadata\MetadataFormBuilder;
+use Dou\Admin\Service\Product\ProductService;
+use Dou\Core\Foundation\Configuration\Config;
+use Dou\Core\Foundation\Exception\DomainException;
+use Dou\Core\Foundation\Extension\Module;
+use Dou\Core\Service\Content\MarkdownRenderer;
+use Dou\Core\Support\Check;
+use Dou\Core\Web\Http\Request;
+use Dou\Core\Web\Http\Response;
+use Dou\Front\Model\Brand\Brand;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 后台商品控制器（route=product/...）
+ *
+ * 格式校验由 ProductFormRequest 完成（Action 注入按方法名绑定 scene），失败时抛出 DomainException；
+ * 业务阻断由 Service 抛出 DomainException；成功反馈走 `redirect($url)->with('success', $msg)` + flash 渲染，
+ * 删除二次确认走基类 `respondDeleteResult()` 分流。
+ */
+class ProductController extends BaseController
+{
+    use QuickEditable;
+    /** @var ProductService */
+    private $productService;
+
+    /** @var MarkdownRenderer */
+    private $markdown;
+
+    /** @var MetadataFormBuilder */
+    private $metadataFormBuilder;
+
+    /**
+     * @param ProductService $productService
+     * @param MarkdownRenderer $markdown
+     * @param MetadataFormBuilder $metadataFormBuilder
+     */
+    public function __construct(
+        ProductService $productService,
+        MarkdownRenderer $markdown,
+        MetadataFormBuilder $metadataFormBuilder
+    ) {
+        $this->productService = $productService;
+        $this->markdown = $markdown;
+        $this->metadataFormBuilder = $metadataFormBuilder;
+    }
+
+    /**
+     * 商品列表
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function index(Request $request)
+    {
+        $catId = $request->integer('category_id', 0);
+        $keyword = trim((string) $request->input('keyword', ''));
+        $page = $request->integer('page', 1);
+        $sort = (string) $request->plainText('sort');
+        $order = (string) $request->plainText('order');
+
+        $result = $this->productService->buildProductListData($catId, $keyword, $page, $sort, $order);
+
+        $userLevelOption = Module::make('user.user_level_option_builder');
+        return $this->view('product.htm', [
+            'ur_here' => lang('product_list'),
+            'page_actions' => array(
+                array('href' => route('admin.product.create'), 'text' => lang('product_create'), 'style' => 'add'),
+            ),
+            'rec' => 'default',
+            'category_id' => $catId,
+            'keyword' => $keyword,
+            'product_category' => ProductCategory::flat(),
+            'product_list' => $result['list'],
+            'pager' => $result['pager'],
+            'metadata_schema' => $result['metadata_schema'],
+            'user_level_option' => $userLevelOption !== null ? $userLevelOption->options() : array(),
+            // 未随包下发 excel 库时不展示导入/导出入口
+            'excel' => file_exists(LIBRARY_PATH . 'excel/Excel.php'),
+        ]);
+    }
+
+    /**
+     * 添加表单
+     *
+     * @return Response
+     */
+    public function create()
+    {
+        $adminId = (int) auth('admin')->id();
+        attachment()->cleanupUserDrafts('admin', $adminId, 'product');
+        $draftToken = attachment()->newDraftToken('admin', $adminId);
+
+        $product = $this->productService->buildProductDefaultData(0);
+
+        $userLevelOption = Module::make('user.user_level_option_builder');
+
+        $dataList = data()->query('product', '0');
+        $languageForm = $this->languageDraft()->buildFormState('product', 0);
+
+        return $this->view('product.htm', [
+            'ur_here' => lang('product_create'),
+            'page_actions' => array(
+                array('href' => route('admin.product'), 'text' => lang('product_list'), 'style' => ''),
+            ),
+            'rec' => 'create',
+            'item_id' => 0,
+            'draft_token' => $draftToken,
+            'item_content' => '',
+            'product' => $product,
+            'product_category' => ProductCategory::flat(),
+            'brand_list' => Config::get('features.brand', false) ? Brand::applyDefaultOrder()->get() : array(),
+            'user_level_option' => $userLevelOption !== null ? $userLevelOption->options() : array(),
+            'btn_lang' => $languageForm['btn_lang'],
+            'lang_drafts' => $languageForm['lang_drafts'],
+            'metadata_form' => $this->metadataFormBuilder->build('product', '', 0),
+            'attribute_box' => $this->buildAttributeBox('product', 0, 0, 'create'),
+            'attribute_mode' => 'create',
+            'data_list' => $dataList,
+        ]);
+    }
+
+    /**
+     * 提交新增
+     *
+     * 字段白名单与校验规则定义在 ProductFormRequest::rules()。
+     * Action 注入会按方法名自动绑定 scene=store。
+     *
+     * @param ProductFormRequest $formRequest
+     * @param Request $request
+     * @return Response
+     */
+    public function store(ProductFormRequest $formRequest, Request $request)
+    {
+        $draftToken = (string) $request->post('draft_token', '');
+        $adminId = (int) auth('admin')->id();
+        $newId = $this->productService->insert($formRequest->validated(), $draftToken, $adminId);
+        return redirect(route('admin.product.edit', array('id' => $newId)))
+            ->with('success', lang('product_add_succes'), route('admin.product'), lang('back_to_list'));
+    }
+
+    /**
+     * 编辑表单
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function edit(Request $request)
+    {
+        $id = $request->integer('id', 0);
+        if ($id <= 0) {
+            throw new DomainException(lang('illegal'), route('admin.product'));
+        }
+
+        $product = $this->productService->buildProductEditData($id);
+        if ($product === null) {
+            throw new DomainException(lang('item_not_exist'), route('admin.product'));
+        }
+
+        $dataList = data()->query('product', (string) $id);
+
+        $userLevelOption = Module::make('user.user_level_option_builder');
+        $languageForm = $this->languageDraft()->buildFormState('product', $id);
+
+        return $this->view('product.htm', [
+            'ur_here' => lang('product_edit'),
+            'page_actions' => array(
+                array('href' => route('admin.product'), 'text' => lang('product_list'), 'style' => ''),
+            ),
+            'rec' => 'edit',
+            'item_id' => $id,
+            'draft_token' => '',
+            'item_content' => $this->markdown->toHtml($product['content']),
+            'product' => $product,
+            'product_category' => ProductCategory::flat(),
+            'brand_list' => Config::get('features.brand', false) ? Brand::applyDefaultOrder()->get() : array(),
+            'user_level_option' => $userLevelOption !== null ? $userLevelOption->options(null, unserialize($product['level_price'])) : array(),
+            'btn_lang' => $languageForm['btn_lang'],
+            'lang_drafts' => $languageForm['lang_drafts'],
+            'metadata_form' => $this->metadataFormBuilder->build('product', isset($product['metadata']) ? $product['metadata'] : '', $id),
+            'attribute_box' => $this->buildAttributeBox('product', $product['category_id'], $id, 'edit'),
+            'attribute_mode' => 'edit',
+            'data_list' => $dataList,
+        ]);
+    }
+
+    /**
+     * 提交更新
+     *
+     * 字段白名单与校验规则定义在 ProductFormRequest::rules()。
+     * Action 注入会按方法名自动绑定 scene=update。
+     *
+     * @param ProductFormRequest $formRequest
+     * @param Request $request
+     * @return Response
+     */
+    public function update(ProductFormRequest $formRequest, Request $request)
+    {
+        $data = $formRequest->validated();
+        $this->productService->update($data, (int) auth('admin')->id());
+        return redirect(route('admin.product.edit', array('id' => (int) $data['id'])))
+            ->with('success', lang('product_edit_succes'), route('admin.product'), lang('back_to_list'));
+    }
+
+    /**
+     * 缩略图批量处理
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function thumb(Request $request)
+    {
+        $bundle = $this->productService->buildThumbData($request->post());
+
+        if ($request->input('confirm')) {
+            $this->productService->thumbFlush($bundle['query'], $bundle['mask_tag']);
+        }
+
+        return $this->view('product.htm', [
+            'ur_here' => lang('product_thumb'),
+            'page_actions' => array(
+                array('href' => route('admin.product'), 'text' => lang('product_list'), 'style' => ''),
+            ),
+            'rec' => 'thumb',
+            'mask' => $bundle['mask'],
+        ]);
+    }
+
+    /**
+     * 商品列表快速编辑字段声明。
+     *
+     * @return array
+     */
+    protected function quickEditConfig()
+    {
+        return array(
+            'model' => Product::class,
+            'fields' => array(
+                'title' => array('type' => 'text', 'max' => 150),
+                'price' => array('type' => 'price', 'blank_when_zero' => true),
+                'stock' => array('type' => 'int', 'max' => 4294967295),
+                'sort' => array('type' => 'int'),
+            ),
+        );
+    }
+
+    /**
+     * 属性区 HTML：属性模块是可选模块，缺失时整体降级为空串。
+     *
+     * @param string $module
+     * @param int|string $categoryId
+     * @param int|string $itemId
+     * @param string $mode create|edit
+     * @return string
+     */
+    private function buildAttributeBox($module, $categoryId, $itemId, $mode)
+    {
+        if (!Module::has('attribute') || !class_exists('Dou\\Admin\\Service\\Attribute\\AttributeService')) {
+            return '';
+        }
+
+        return app('Dou\\Admin\\Service\\Attribute\\AttributeService')
+            ->buildBoxHtml($module, $categoryId, $itemId, $mode);
+    }
+
+    /**
+     * 型号关联 Ajax（参数非法时直接返回空片段，由前端 HTML 替换语义自处理）
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function model(Request $request)
+    {
+        $mode = $request->input('mode');
+        $id = $request->input('id');
+        $actionId = $request->input('action_id');
+        if (!Check::letter($mode) || !Check::number($id) || !Check::number($actionId)) {
+            return $this->response('');
+        }
+
+        return $this->response($this->productService->model($mode, $id, $actionId));
+    }
+
+    /**
+     * 删除
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function destroy(Request $request)
+    {
+        $id = $request->integer('id', 0);
+        if ($id <= 0) {
+            throw new DomainException(lang('illegal'), route('admin.product'));
+        }
+
+        $result = $this->productService->delete($id, $request->post());
+        return $this->respondDeleteResult($result);
+    }
+
+    /**
+     * 列表批量操作
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function action(ProductActionFormRequest $formRequest)
+    {
+        $data = $formRequest->validated();
+        $result = $this->productService->action($data);
+        if (!is_array($result)) {
+            // excel/excel_all 分支已由 Excel::export 直接发送二进制响应
+            return null;
+        }
+
+        return redirect($result['back_url'])->with('success', $result['message']);
+    }
+
+    /**
+     * 从 Excel 导入商品（受限：仅标量字段）。
+     *
+     * @return Response
+     */
+    public function importExecl()
+    {
+        $result = $this->productService->importFromExcel();
+        $backUrl = route('admin.product');
+
+        if (!empty($result['ok'])) {
+            $message = preg_replace('/d%/Ums', (string) (int) $result['created'], lang('excel_import_created', '成功导入 d% 条'));
+
+            return redirect($backUrl)->with('success', $message);
+        }
+
+        return redirect($backUrl)->with('error', $this->importErrorMessage($result));
+    }
+
+    /**
+     * 把导入结果码转成面向管理员的中文提示。
+     *
+     * @param array $result
+     * @return string
+     */
+    private function importErrorMessage(array $result)
+    {
+        $code = isset($result['code']) ? (string) $result['code'] : '';
+        $row = isset($result['row']) ? (int) $result['row'] : 0;
+        $rowText = $row > 0 ? preg_replace('/d%/Ums', (string) $row, lang('excel_import_row', '第 d% 行')) : '';
+
+        $map = array(
+            'no_file' => lang('excel_import_no_file', '请选择要导入的 Excel 文件'),
+            'upload_error' => lang('excel_import_upload_error', '文件上传失败，请重试'),
+            'too_large' => lang('excel_import_too_large', '文件超过 5MB，请拆分后重试'),
+            'too_many_rows' => lang('excel_import_too_many_rows', '数据行数超过上限，请拆分后重试'),
+            'unreadable' => lang('excel_import_unreadable', '文件无法解析，请另存为 xlsx 后重试'),
+            'empty' => lang('excel_import_empty', '文件内没有可导入的数据'),
+            'column_mismatch' => lang('excel_import_column_mismatch', '列数超出预期，请按模板列顺序填写'),
+            'invalid_title' => lang('excel_import_invalid_title', '商品名称不能为空'),
+            'invalid_price' => lang('excel_import_invalid_price', '商品价格必须为非负数字'),
+            'invalid_promote_price' => lang('excel_import_invalid_price', '促销价必须为非负数字'),
+            'invalid_stock' => lang('excel_import_invalid_number', '库存必须为非负整数'),
+            'invalid_point' => lang('excel_import_invalid_number', '消费者积分必须为非负整数'),
+            'invalid_sort' => lang('excel_import_invalid_number', '排序必须为非负整数'),
+            'invalid_status' => lang('excel_import_invalid_status', '状态只能填写 1 / 0 或显示 / 隐藏'),
+            'invalid_slug' => lang('excel_import_invalid_slug', '网址别名只能使用小写字母、数字、- 与 _'),
+            'invalid_category' => lang('excel_import_invalid_category', '分类不存在或存在重名，请改用分类 ID'),
+            'db_error' => lang('excel_import_db_error', '写入数据库失败，本次导入已全部回滚'),
+        );
+
+        $message = isset($map[$code]) ? $map[$code] : lang('excel_import_wrong');
+        if ($rowText !== '') {
+            return $rowText . '：' . $message;
+        }
+
+        return $message;
+    }
+}

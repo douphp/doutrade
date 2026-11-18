@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/user.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+ <script type="text/javascript" src="js/jquery.min.js"></script>
+ <script type="text/javascript" src="js/dou.csrf.js"></script>
+ <script type="text/javascript" src="js/vue.global.js"></script>
+</head>
+
+<body>
+ <div id="wrapper">
+  {include file="inc/common_header.tpl"}
+  <div class="container mb">
+   <div id="user">
+    <div class="userLeft"> {include file="inc/user_tree.tpl"} </div>
+    <div class="userIn">
+     <div class="main">
+      <!-- {if $rec eq 'default'} 会员中心 -->
+      <div class="startPage">
+       <div class="basicInfo">
+        <div class="basic">
+         <img class="avatar" src="{$user_info.avatar}" width="120" height="120" alt="{$user_info.user_name}">
+         <div class="basic-profile">
+          <h2>{$dou.user.user_name}</h2>
+          <!-- {if $user_info.level_name} -->
+          <span class="level-capsule"><i class="bi bi-award-fill"></i><em>{$user_info.level_name}</em></span>
+          <!-- {elseif $dou.auth.is_vip} -->
+          <a class="level-capsule" href="{url link='vip'}"><i class="bi bi-award-fill"></i><em>{$lang.vip}</em></a>
+          <!-- {/if} -->
+          <p>
+           <!-- {if $dou.vip.status}-->
+           {$dou.vip.text}：{$dou.vip.start_at} ~ {$dou.vip.end_at} <!-- {if $dou.vip.state eq 'expired'} --><a class="btn-mini" href="{url link='vip'}">{$lang.vip_renew_btn}</a><!-- {/if} -->
+           <!-- {else} -->
+           {$welcome}
+           <!-- {/if} -->
+          </p>
+          <a class="link" href="{url link='user.profile.edit'}">{$lang.user_modify_edit} &gt;</a>
+         </div>
+        </div>
+        <!-- {if $user_info.has_user_level} -->
+        <div class="growth-card">
+         <div class="growth-info">
+          <span class="cur">{$lang.user_growth_value}<b>{$user_info.growth_value_text}</b></span>
+          <!-- {if $user_info.growth_gap_hint} -->
+          <span class="gap">{$user_info.growth_gap_hint}</span>
+          <!-- {/if} -->
+         </div>
+         <div class="growth-bar">
+          <div class="growth-bar-inner<!-- {if $user_info.growth_percent gt 0} --> has-progress<!-- {/if} -->" style="width: {$user_info.growth_percent}%;"></div>
+         </div>
+        </div>
+        <!-- {/if} -->
+        <ul class="info">
+         <li>{$lang.user_email}：<b>{$user_info.email}</b></li>
+         <li>{$lang.user_mobile}：<b>{$user_info.mobile}</b></li>
+         <li>{$lang.user_user_sn}：<b>{$user_info.user_sn}</b></li>
+         <li>{$lang.user_last_login}：<b>{$user_info.last_login}</b></li>
+         <li>{$lang.user_last_ip}：<b>{$user_info.last_ip}</b></li>
+         <li>{$lang.user_login_count}：<b>{$user_info.login_count}</b></li>
+         <!-- {if $features.point} -->
+         <li>{$lang.user_point}：<b>{$user_info.point}</b></li>
+         <!-- {/if} -->
+         <!-- {if $features.money} -->
+         <li>{$lang.user_total_consumption}：<b>{$user_info.total_consumption}</b></li>
+         <li>{$lang.user_total_promote}：<b>{$user_info.total_promote}</b></li>
+         <!-- {/if} -->
+        </ul>
+       </div>
+       <!-- {if $dou.auth.is_distribution} -->
+       <div class="promotion">
+        <h2>{$lang.user_promotion_link}</h2>
+        <div class="link">{$user_info.promotion_link}</div>
+        <h2>{$lang.user_promotion_qrcode}</h2>
+        <div class="qrcode"><img src="{$user_info.promotion_qrcode}" width="120" height="120"></div>
+       </div>
+       <!-- {/if} -->
+      </div>
+      <!-- {/if} -->
+      <!-- {if $rec eq 'edit'} 会员信息编辑 -->
+      <h3>{$lang.user_edit}</h3>
+      <div class="form">
+       <div class="form-item">
+        <div class="form-label">{$lang.user_mobile}<i>*</i></div>
+        <div class="input-block">
+         <em>{$user_info.mobile}</em><a class="modify" href="{url link='user.verify.mobile'}">{if $user_info.mobile}{$lang.modify}{else}{$lang.set}{/if}</a>
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_email}<i>*</i></div>
+        <div class="input-block">
+         <em>{$user_info.email}</em><a class="modify" href="{url link='user.verify.email'}">{if $user_info.email}{$lang.modify}{else}{$lang.set}{/if}</a>
+        </div>
+       </div>
+      </div>
+      <form id="userEdit" x-data="douForm()" @submit.prevent="submit" action="{url link='user.profile.edit_post'}" method="post" enctype="multipart/form-data">
+       <div class="form">
+        <div class="form-item">
+         <div class="form-label">{$lang.user_nickname}<i>*</i></div>
+         <div class="input-block">
+          <input name="nickname" type="text" class="input" value="{$user_info.nickname}" size="55" />
+          <p class="cue" x-show="hasError('nickname')" x-text="errorOf('nickname')"></p>
+         </div>
+        </div>
+        <!-- {if $cur_lang eq 'en_us'} -->
+        <div class="form-item">
+         <div class="form-fields">
+          <div class="form-field-inline">
+           <div class="form-label">{$lang.user_first_name}：</div>
+           <div class="input-block">
+            <input name="first_name" type="text" class="input" value="{$user_info.first_name}" size="30" />
+            <p class="cue" x-show="hasError('first_name')" x-text="errorOf('first_name')"></p>
+           </div>
+          </div>
+          <div class="form-field-inline">
+           <div class="form-label">{$lang.user_last_name}：</div>
+           <div class="input-block">
+            <input name="last_name" type="text" class="input" value="{$user_info.last_name}" size="30" />
+            <p class="cue" x-show="hasError('last_name')" x-text="errorOf('last_name')"></p>
+           </div>
+          </div>
+         </div>
+        </div>
+        <!-- {else} -->
+        <div class="form-item">
+         <div class="form-label">{$lang.user_contact}</div>
+         <div class="input-block">
+          <input name="contact" type="text" class="input" value="{$user_info.contact}" size="55" />
+          <p class="cue" x-show="hasError('contact')" x-text="errorOf('contact')"></p>
+         </div>
+        </div>
+        <!-- {/if} -->
+        <div class="form-item">
+         <div class="form-label">{$lang.user_phone}</div>
+         <div class="input-block">
+          <input name="phone" type="text" class="input" value="{$user_info.phone}" size="55" />
+          <p class="cue" x-show="hasError('phone')" x-text="errorOf('phone')"></p>
+         </div>
+        </div>
+        <div class="form-item">
+         <div class="form-label">{$lang.user_address}</div>
+         <div class="input-block">
+          <input name="address" type="text" class="input" value="{$user_info.address}" size="80" />
+          <div class="form-newline form-area" x-data="douArea()" x-init="init($el)" data-default="{$user_info.country},{$user_info.province},{$user_info.city},{$user_info.district}">
+           <select class="form-control" name="country" data-part="country"></select>
+           <select class="form-control" name="province" data-part="province"></select>
+           <select class="form-control" name="city" data-part="city"></select>
+           <select class="form-control" name="district" data-part="district"></select>
+          </div>
+          <p class="cue" x-show="hasError('address')" x-text="errorOf('address')"></p>
+         </div>
+        </div>
+        <div class="form-item">
+         <div class="form-label">{$lang.user_postcode}</div>
+         <div class="input-block">
+          <input name="postcode" type="text" class="input" value="{$user_info.postcode}" size="55" />
+          <p class="cue" x-show="hasError('postcode')" x-text="errorOf('postcode')"></p>
+         </div>
+        </div>
+        <div class="form-item">
+         <div class="form-label">{$lang.user_sex}</div>
+         <div class="input-block">
+          <label for="sex_1">
+           <input type="radio" name="sex" id="sex_1" value="1" {if $user_info.sex eq '1' } checked="true" {/if}>
+           {$lang.user_man}</label>
+          <label for="sex_0">
+           <input type="radio" name="sex" id="sex_0" value="0" {if $user_info.sex eq '0' } checked="true" {/if}>
+           {$lang.user_woman}</label>
+          {$wrong.sex}
+         </div>
+        </div>
+        <div class="form-item">
+         <div class="form-label">{$lang.user_avatar}</div>
+         <div class="input-block">
+          <div id="avatar" class="input-file">
+           <p class="input-file-show">
+            <!-- {if $user_info.avatar} -->
+            <img src="{$user_info.avatar}" />
+            <!-- {/if} -->
+           </p>
+           <input type="file" name="avatar" style="display: none" />
+           <input type="hidden" name="avatarCheck" value="{$user_info.avatar}" />
+           <input type="button" value="{$lang.user_avatar_upload}" data-target="avatar" class="input-file-btn" />
+          </div>
+          <p class="cue" x-show="hasError('avatarCheck')" x-text="errorOf('avatarCheck')"></p>
+         </div>
+        </div>
+        <!-- {if $user_info.defined} -->
+        <div class="form-item">
+         <div class="form-label">{$lang.user_defined}</div>
+         <div class="input-block">
+          <textarea name="defined" id="defined" cols="58" class="textarea-auto" style="height:{$user_info.defined_count}0px">{$user_info.defined}</textarea>
+          <script type="text/javascript" src="images/jquery.autotext-area.js"></script>
+          <script type="text/javascript">
+           { literal }
+           $("#defined").autotext - area({ maxHeight: 300 });
+           {/literal }
+          </script>
+         </div>
+        </div>
+        <!-- {/if} -->
+        <div class="form-item submit">
+         <div class="input-block">
+          <input type="hidden" name="token" value="{$token}" />
+          <button type="submit" class="btn" :disabled="loading">{$lang.btn_submit}</button>
+          <p class="cue" x-show="message" x-text="message"></p>
+         </div>
+        </div>
+       </div>
+      </form>
+      <!-- {/if} -->
+      <!-- {if $rec eq 'sns'} 账号绑定 -->
+      <h3>{$lang.user_sns}</h3>
+      <div class="snsList">
+       <!-- {foreach from=$plugin_list item=plugin} -->
+       <dl>
+        <dt><i style="background: #19B4EA url({$plugin.icon}) no-repeat 50% 50%;"></i>{$plugin.name} <!-- {if $plugin.linked} --><em>{$lang.user_sns_linked}</em><!-- {/if} --></dt>
+        <dd>
+         <!-- {if $plugin.linked} -->
+         <a href="{$url.sns}&remove={$plugin.unique_id}">{$lang.user_sns_remove}</a>
+         <!-- {else} -->
+         <a href="{$url.sns}&link={$plugin.unique_id}">{$lang.user_sns_link}</a>
+         <!-- {/if} -->
+        </dd>
+       </dl>
+       <!-- {/foreach} -->
+      </div>
+      <!-- {/if} -->
+     </div>
+    </div>
+    <!-- /userIn -->
+   </div>
+  </div>
+  {include file="inc/common_footer.tpl"}
+ </div>
+ <script type="text/javascript" src="js/alpine.min.js" defer></script>
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/dou.form.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+ <script type="text/javascript" src="js/input.js"></script>
+ <script type="text/javascript" src="js/form.js"></script>
+</body>
+
+</html>

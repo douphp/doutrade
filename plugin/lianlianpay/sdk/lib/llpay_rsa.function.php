@@ -1,0 +1,80 @@
+<?php
+
+/* *
+ * RSA
+ * 详细：RSA加密
+ * 版本：1.0
+ * 日期：2014-09-1
+ * 说明：
+ * 以下代码只是为了方便商户测试而提供的样例代码，商户可以根据自己网站的需要，按照技术文档编写,并非一定要使用该代码。
+ */
+
+/********************************************************************************/
+
+/**RSA签名
+ * $data签名数据(需要先排序，然后拼接)
+ * 签名用商户私钥，必须是没有经过pkcs8转换的私钥
+ * 最后的签名，需要用base64编码
+ * return Sign签名
+ */
+
+function Rsasign($data, $priKey)
+{
+    //转换为openssl密钥，必须是没有经过pkcs8转换的私钥
+    //服务器中php.ini -> 去掉【extension=php_openssl.dll】前面的注释";"
+    $res = @openssl_get_privatekey($priKey);
+    if ($res === false) {
+        throw new \Dou\Core\Foundation\Exception\DomainException('连连支付私钥无效，请联系管理员。', HOME_URL);
+    }
+
+    //调用openssl内置签名方法，生成签名$sign
+    $ok = openssl_sign($data, $sign, $res, OPENSSL_ALGO_MD5);
+
+    //释放资源
+    if (PHP_VERSION_ID < 80000) {
+        openssl_free_key($res);
+    }
+    if (!$ok) {
+        throw new \Dou\Core\Foundation\Exception\DomainException('连连支付签名失败，请联系管理员。', HOME_URL);
+    }
+
+    //base64编码
+    $sign = base64_encode($sign);
+    //file_put_contents("log.txt","签名原串:".$data."\n", FILE_APPEND);
+    return $sign;
+}
+
+/********************************************************************************/
+
+/**RSA验签
+ * $data待签名数据(需要先排序，然后拼接)
+ * $sign需要验签的签名,需要base64_decode解码
+ * 验签用连连支付公钥
+ * return 验签是否通过 bool值
+ */
+function Rsaverify($data, $sign)
+{
+    //读取连连支付公钥文件
+    $pubKey = @file_get_contents(dirname(dirname(__DIR__)) . '/key/llpay_public_key.pem');
+    if (!is_string($pubKey) || trim($pubKey) === '') {
+        return false;
+    }
+
+    //转换为openssl格式密钥
+    $res = @openssl_get_publickey($pubKey);
+    if ($res === false) {
+        return false;
+    }
+
+    //调用openssl内置方法验签，返回bool值
+    $decoded = base64_decode($sign, true);
+    $result = $decoded === false ? false : openssl_verify($data, $decoded, $res, OPENSSL_ALGO_MD5) === 1;
+
+    //释放资源
+    if (PHP_VERSION_ID < 80000) {
+        openssl_free_key($res);
+    }
+
+    //返回资源是否成功
+    return $result;
+}

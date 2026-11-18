@@ -1,0 +1,456 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Install\Service;
+
+use Dou\Core\Facade\DB;
+use Dou\Core\Foundation\Container\Container;
+use Dou\Core\Infra\Database\Connection;
+use Dou\Core\Support\Check;
+use Dou\Core\Support\DbConnectError;
+use Dou\Core\Support\DbVersion;
+use Dou\Core\Support\FileHelper;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 安装阶段的数据库相关业务。
+ *
+ * 拆分点：
+ *   - 表单校验：validateAccount() / validateConnection()
+ *   - 建库：connectAndCreateDatabase()
+ *   - 整体安装：runInstall()（写 config.php、导 SQL、初始化管理员/配置、可选清理测试数据）
+ *
+ * Connection->error() 内部会 exit()，因此先用裸 mysqli 做完连接 + 建库 + 选库的探活，
+ * 再构造 Connection 实例做后续业务，避免连接失败时把整页打断。
+ */
+class DatabaseInstallService
+{
+    /** @var array */
+    private $lang;
+
+    /** @var ConfigWriterService */
+    private $configWriter;
+
+    /**
+     * @param array $lang
+     * @param ConfigWriterService $configWriter
+     */
+    public function __construct(array $lang, ConfigWriterService $configWriter)
+    {
+        $this->lang = $lang;
+        $this->configWriter = $configWriter;
+    }
+
+    /**
+     * 校验管理员账号 / 密码 / 邮箱。
+     *
+     * @param array $post
+     * @return string 空串表示校验通过；否则返回错误提示
+     */
+    public function validateAccount(array $post)
+    {
+        $username = isset($post['username']) ? trim((string) $post['username']) : '';
+        $password = isset($post['password']) ? (string) $post['password'] : '';
+        $password_confirm = isset($post['password_confirm']) ? (string) $post['password_confirm'] : '';
+        $email = isset($post['email']) ? trim((string) $post['email']) : '';
+
+        if ($username === '') {
+            return $this->lang['cue_username_empty'];
+        }
+        if (!Check::adminAccount($username)) {
+            return $this->lang['cue_username_wrong'];
+        }
+        if ($password === '') {
+            return $this->lang['cue_password_empty'];
+        }
+        if (!Check::password($password)) {
+            return $this->lang['cue_password_wrong'];
+        }
+        if ($password_confirm === '') {
+            return $this->lang['cue_password_confirm_empty'];
+        }
+        if ($password !== $password_confirm) {
+            return $this->lang['cue_password_confirm_wrong'];
+        }
+        if ($email !== '' && !Check::email($email)) {
+            return $this->lang['cue_email_wrong'];
+        }
+        return '';
+    }
+
+    /**
+     * 尝试连接 MySQL 并建库选库（utf8mb4_unicode_ci）。
+     *
+     * @param string $dbhost
+     * @param string $dbuser
+     * @param string $dbpass
+     * @param string $dbname
+     * @return string 空串表示成功；否则返回错误提示
+     */
+    public function connectAndCreateDatabase($dbhost, $dbuser, $dbpass, $dbname)
+    {
+        // PHP 8.1+ mysqli 默认 throw exception；安装阶段要求把错误以友好提示形式回显
+        if (version_compare(PHP_VERSION, '8.1', '>=')) {
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+        } else {
+            mysqli_report(MYSQLI_REPORT_OFF);
+        }
+
+        try {
+            // 解析 host:port（与 Connection::connect 行为一致）
+            $hostonly = $dbhost;
+            $port = 3306;
+            if (strpos($dbhost, ':') !== false) {
+                $segments = explode(':', $dbhost, 2);
+                $hostonly = $segments[0];
+                $portNum = (int) $segments[1];
+                if ($portNum > 0) {
+                    $port = $portNum;
+                }
+            }
+
+            $link = @mysqli_connect($hostonly, $dbuser, $dbpass, null, $port);
+            if (!$link) {
+                $connect_error = (string) mysqli_connect_error();
+                $cue = $this->lang['cue_connect'] . ': ' . $connect_error;
+                if (DbConnectError::isAuthPluginError($connect_error)) {
+                    $cue .= DbConnectError::guide($connect_error);
+                }
+                return $cue;
+            }
+
+            // 服务器版本探测（经 DbVersion 归一，兼容 MariaDB 前缀与未来 CalVer 版本号）：
+            // MySQL 低于 version.php 的 mysql_min 时明确报最低版本要求，避免导入阶段连环 SQL 失败；
+            // MariaDB 提示兼容后继续。最低版本取自 install/version.php（单一来源）。
+            $serverVersion = (string) mysqli_get_server_info($link);
+            $mysql_min = douphp_install_min_mysql();
+            if (DbVersion::serverFamily($serverVersion) === 'mysql'
+                && !DbVersion::isAtLeast($serverVersion, $mysql_min)) {
+                @mysqli_close($link);
+                return sprintf($this->lang['cue_mysql_too_old'], $serverVersion, $mysql_min);
+            }
+
+            @mysqli_set_charset($link, 'utf8mb4');
+            $create_db_result = @mysqli_query($link, "CREATE DATABASE IF NOT EXISTS `$dbname` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            if ($create_db_result === false) {
+                $cue = $this->lang['cue_create_db_failed'] . ': ' . mysqli_error($link);
+                @mysqli_close($link);
+                return $cue;
+            }
+            if (mysqli_select_db($link, $dbname) === false) {
+                @mysqli_close($link);
+                return $this->lang['cue_no_this_dbname'];
+            }
+            @mysqli_query($link, "ALTER DATABASE `$dbname` CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci");
+            @mysqli_close($link);
+            return '';
+        } catch (\Exception $e) {
+            $cue = $this->lang['cue_connect'] . ': ' . $e->getMessage();
+            if (DbConnectError::isAuthPluginError($e->getMessage())) {
+                $cue .= DbConnectError::guide($e->getMessage());
+            }
+            return $cue;
+        }
+    }
+
+    /**
+     * 完整执行安装：写 config.php / module.php → 导 SQL → 初始化管理员/系统配置 → 可选清理测试数据。
+     *
+     * @param array $post 安装表单
+     * @return array array('username' => 设置成功后的管理员用户名, 'douphp_version' => 本次安装的核心版本)
+     */
+    public function runInstall(array $post)
+    {
+        $dbhost = isset($post['dbhost']) ? trim((string) $post['dbhost']) : '';
+        $dbname = isset($post['dbname']) ? trim((string) $post['dbname']) : '';
+        $dbuser = isset($post['dbuser']) ? trim((string) $post['dbuser']) : '';
+        $dbpass = isset($post['dbpass']) ? (string) $post['dbpass'] : '';
+        $prefix = isset($post['prefix']) ? trim((string) $post['prefix']) : 'dou_';
+        $username = isset($post['username']) ? trim((string) $post['username']) : '';
+        $password = isset($post['password']) ? (string) $post['password'] : '';
+        $email = isset($post['email']) ? trim((string) $post['email']) : '';
+        $test_data = isset($post['test_data']) ? (string) $post['test_data'] : 'yes';
+
+        // 本次安装版本：唯一来源 install/data/backup/douphp.sql 的 dou_config.douphp_version。
+        // 在落盘 / 导库之前先解析校验，缺失即 fail loud，避免装出半成品。
+        $douphp_version = $this->readSqlDumpVersion();
+
+        // 落盘 config/config.php
+        $this->configWriter->write(array(
+            'dbhost' => $dbhost,
+            'dbname' => $dbname,
+            'dbuser' => $dbuser,
+            'dbpass' => $dbpass,
+            'prefix' => $prefix,
+        ));
+
+        // 落盘 config/module.php（安装包自带的默认模块账本）
+        $this->writeModuleLedger();
+
+        // 不 include config/config.php（其内 define 会污染当前请求常量），DB 参数直接用局部变量
+        $dou = new Connection($dbhost, $dbuser, $dbpass, $dbname, $prefix, 'utf-8');
+
+        // 把刚连好的 Connection 绑定为容器单例，让本类与后续业务一致通过 DB:: 静态门面访问数据库
+        // （install 不走 core/bootstrap.php，没有 InitTrait::instantiateCoreObjects 的预绑定）
+        Container::getInstance()->instance(Connection::class, $dou);
+
+        $this->importSql($prefix);
+
+        $build_date = time();
+        $this->initAdmin($username, $password, $email, $build_date);
+        $this->initSiteConfig($dbhost, $dbname, $dbuser, $dbpass, $build_date, $douphp_version);
+        $this->maybeClearTestData($prefix, $test_data);
+
+        return array('username' => $username, 'douphp_version' => $douphp_version);
+    }
+
+    /**
+     * 从 install/data/backup/douphp.sql 的 dou_config 默认行解析版本串。
+     *
+     * 安装版本以 SQL 默认数据为唯一来源（install/version.php 只保留 php_min / mysql_min）：
+     * 导库后 dou_config.douphp_version 已是该值，安装流程不再单独覆盖写入。
+     *
+     * @return string 形如 'v2.0 Release 20261025'
+     */
+    private function readSqlDumpVersion()
+    {
+        $file = INSTALL_PATH . 'data/backup/douphp.sql';
+        $sql = is_file($file) ? (string) file_get_contents($file) : '';
+        if ($sql !== '' && preg_match("/'douphp_version'\s*,\s*'([^']*)'/i", $sql, $match)) {
+            $version = trim((string) $match[1]);
+            if ($version !== '') {
+                return $version;
+            }
+        }
+
+        throw new \Exception('安装包缺少版本信息：install/data/backup/douphp.sql 中 dou_config 的 douphp_version 缺失或为空，请确认安装包完整。');
+    }
+
+    /**
+     * 导入 install/data/backup/douphp.sql：替换表前缀后按 fnExecute 批量执行。
+     *
+     * @param string $prefix
+     * @return void
+     */
+    private function importSql($prefix)
+    {
+        $sql = file_get_contents(INSTALL_PATH . 'data/backup/douphp.sql');
+        $sql = preg_replace('/dou_/Ums', $prefix, $sql);
+        $sql_head = "SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\r\n";
+        $sql_head .= "SET time_zone = '+00:00';\r\n";
+        $sql_head .= "/*!40101 SET NAMES utf8mb4 */;\r\n\r\n";
+        DB::fnExecute($sql_head . $sql);
+    }
+
+    /**
+     * 复制安装包自带的默认模块账本 install/data/module.php 到 config/module.php。
+     *
+     * 全新安装使用 trade 购物商城账本（商品/文章为列模块，会员、订单、评论、售后、
+     * 收藏、积分、优惠券、插件、语言、属性、邮件、品牌、地区为单页模块）；
+     * 安装后由后台「模块管理」维护。
+     *
+     * @return void
+     */
+    private function writeModuleLedger()
+    {
+        $source = INSTALL_PATH . 'data/module.php';
+        $target = ROOT_PATH . 'config/module.php';
+
+        $this->readDefaultModuleLedger();
+        if (@copy($source, $target) === false) {
+            throw new \Exception('模块账本写入失败：config/module.php 不可写，请检查目录权限后重试。');
+        }
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($target, true);
+        }
+    }
+
+    /**
+     * 读取并校验安装包自带的默认模块账本。
+     *
+     * @return array
+     */
+    private function readDefaultModuleLedger()
+    {
+        $file = INSTALL_PATH . 'data/module.php';
+        if (!is_file($file)) {
+            throw new \Exception('安装包缺少默认模块账本：install/data/module.php，请确认安装包完整。');
+        }
+
+        $ledger = include $file;
+        if (!is_array($ledger)) {
+            throw new \Exception('默认模块账本格式错误：install/data/module.php');
+        }
+
+        return $ledger;
+    }
+
+    /**
+     * 写入站点初始 dou_config：hash_code / build_date / update_date / domain / cloud_account / rewrite。
+     * （douphp_version 沿用 douphp.sql 的导库结果，这里不再覆盖）
+     *
+     * @param string $dbhost
+     * @param string $dbname
+     * @param string $dbuser
+     * @param string $dbpass
+     * @param int $buildDate
+     * @param string $douphpVersion 本次安装版本（取自 install/data/backup/douphp.sql，仅用于推导 update_date）
+     * @return void
+     */
+    private function initSiteConfig($dbhost, $dbname, $dbuser, $dbpass, $buildDate, $douphpVersion)
+    {
+        // 站点唯一性密钥
+        $hash_code = md5(md5(time()) . md5(md5(ROOT_URL . $dbhost . $dbname . $dbuser . $dbpass)));
+
+        $douphp_version = trim((string) $douphpVersion);
+        $version_date = substr($douphp_version, -8);
+
+        // 默认模块账本：以 install/data/module.php 的 trade 商城模块清单为准
+        $ledger = $this->readDefaultModuleLedger();
+        $moduleKeys = array_merge(
+            isset($ledger['column_module']) ? (array) $ledger['column_module'] : array(),
+            isset($ledger['single_module']) ? (array) $ledger['single_module'] : array()
+        );
+
+        // 以 SQL 自带的 update_date 为基线，保留 theme / plugin 等类目，仅更新 system 与 module
+        $rawUpdateDate = DB::table('config')->where('name', 'update_date')->value('value');
+        $updateDate = is_string($rawUpdateDate) && $rawUpdateDate !== ''
+            ? @unserialize($rawUpdateDate)
+            : array();
+        if (!is_array($updateDate)) {
+            $updateDate = array();
+        }
+
+        $updateDate['system'] = array(
+            'update' => $version_date,
+            'patch' => $version_date,
+        );
+        if (!isset($updateDate['module']) || !is_array($updateDate['module'])) {
+            $updateDate['module'] = array();
+        }
+        foreach ($moduleKeys as $module) {
+            $module = trim((string) $module);
+            if ($module !== '') {
+                $updateDate['module'][$module] = $version_date;
+            }
+        }
+
+        $configUpdates = array(
+            'rewrite' => '0',
+            'build_date' => (string) $buildDate,
+            'hash_code' => $hash_code,
+            'update_date' => serialize($updateDate),
+            'cloud_account' => '',
+            'domain' => ROOT_URL,
+        );
+        foreach ($configUpdates as $name => $value) {
+            DB::table('config')->where('name', $name)->update(array('value' => $value));
+        }
+    }
+
+    /**
+     * 初始化管理员账号（id=1）：BCRYPT 密码，与 LoginService 对齐。
+     *
+     * @param string $username
+     * @param string $password
+     * @param string $email
+     * @param int $buildDate
+     * @return void
+     */
+    private function initAdmin($username, $password, $email, $buildDate)
+    {
+        DB::table('admin')->where('id', 1)->update(array(
+            'username' => $username,
+            'password' => password_hash($password, PASSWORD_BCRYPT),
+            'email' => $email,
+            'created_at' => date('Y-m-d H:i:s', $buildDate),
+        ));
+    }
+
+    /**
+     * 当 $test_data === 'no' 时清空示例数据：TRUNCATE 一组示例表 + 删 images/slide 与 images 子内容。
+     *
+     * @param string $prefix
+     * @param string $testData
+     * @return void
+     */
+    private function maybeClearTestData($prefix, $testData)
+    {
+        if ($testData !== 'no') {
+            return;
+        }
+        $truncate_tables = array(
+            // 默认企业站已有清理项
+            'admin_log',
+            'article',
+            'article_category',
+            'product',
+            'product_category',
+            'show',
+            'file',
+            'nav',
+
+            // 商城属性 / 品牌 / 评论
+            'attribute',
+            'attribute_value',
+            'brand',
+            'comment',
+
+            // 优惠券
+            'coupon',
+            'coupon_log',
+
+            // 售后
+            'aftersale',
+            'aftersale_item',
+            'aftersale_log',
+            'aftersale_return',
+
+            // 会员中心
+            'favorites',
+            'point',
+            'email',
+
+            // 订单
+            'order',
+            'order_address',
+            'order_cart',
+            'order_coupon',
+            'order_invoice',
+            'order_item',
+            'order_payment',
+            'order_refund',
+            'order_status_log',
+
+            // 会员
+            'user',
+            'user_contact',
+            'user_level',
+            'user_level_log',
+            'user_log',
+            'user_sns',
+            'user_tag',
+            'user_token',
+            'user_wallet',
+        );
+        foreach ($truncate_tables as $t) {
+            DB::query('TRUNCATE ' . $prefix . $t);
+        }
+        FileHelper::delDir(ROOT_PATH . 'images/slide', true);
+        FileHelper::delDir(ROOT_PATH . 'images', true);
+    }
+}

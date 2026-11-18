@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+/**
+ * cloud 后台声明式路由
+ *
+ * 声明 ?route=cloud[/<action>] 形态：豆壳云服务（安装 / 订单 / 账号 / 版权 / 升级还原点）。
+ */
+
+use Dou\Admin\Controller\Cloud\CloudController;
+use Dou\Admin\Controller\Cloud\SnapshotController;
+use Dou\Core\Web\Routing\Route;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+Route::name('admin.')->group(function () {
+    // offline：离线升级页（把官方核心升级包放到 storage/install/package/ 后在此发起升级），
+    // 零必填参数；可选的 download_url 仅供页面展示下载地址。
+    Route::group('cloud', CloudController::class)
+        ->prefix('cloud')
+        ->get(['index', 'install', 'offline', 'account', 'update'])
+        ->post(['details', 'order', 'account_post', 'copyright', 'account_clean', 'close_update', 'open_update']);
+
+    // 升级还原点：恢复为确认 POST + 带令牌的 GET 链式续跑，清理为 POST，删除为 DELETE。
+    Route::group('cloud', SnapshotController::class)
+        ->prefix('cloud')
+        ->get(['snapshot', 'snapshot_down', 'snapshot_rescue', 'snapshot_abandon', 'snapshot_maintenance_off'])
+        ->any(['snapshot_restore'])
+        ->post(['snapshot_cleanup'])
+        ->delete(['snapshot_destroy']);
+
+    // install_step：安装单步 JSON API，控制器自带 csrf()->verify() 并返回 JSON 419，
+    // 不能走 CsrfMiddleware 的 HTML 提示页拒绝（会破坏 API 契约），故路由级豁免 csrf。
+    Route::any('cloud/install_step', CloudController::class, 'install_step', 'cloud')
+        ->withoutMiddleware(['csrf']);
+
+    // install_progress：下载进度轮询（GET JSON，控制器自带 token 校验），
+    // 与 install_step 同理豁免 csrf 中间件（避免 HTML 拒绝页破坏 JSON 契约）。
+    Route::any('cloud/install_progress', CloudController::class, 'install_progress', 'cloud')
+        ->withoutMiddleware(['csrf']);
+});

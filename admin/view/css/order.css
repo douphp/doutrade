@@ -1,0 +1,71 @@
+/* 订单
+----------------------------------------------- */
+#order .view .tracking .tracking-no {
+ float:left;
+ width:50%;
+ font-size:14px;
+ color:#333;
+}
+#order .view .tracking .tracking-submit {
+ float:right;
+ width:50%;
+ text-align:right;
+}
+#order .view .btn-show {
+ background: #FFFFFF url(../images/icon_edit_blue.png) no-repeat;
+ border: none;
+ width:16px;
+ height:16px;
+ text-indent:-999px;
+ overflow:hidden;
+ cursor:pointer;
+ margin-left:10px;
+}
+#order .view .btn-hide {
+ background: #FFFFFF url(../images/icon_no.png) no-repeat;
+ border: none;
+ width:14px;
+ height:14px;
+ text-indent:-999px;
+ overflow:hidden;
+ cursor:pointer;
+ margin-top:5px;
+}
+#order .view .tracking-submit .edit {
+ display:none;
+}
+/*- data -*/
+#order .data {
+}
+#order .data h2 {
+ font-size: 24px;
+ color: #555;
+}
+#order .data .row {
+ display: flex;
+	justify-content: space-between;
+	flex-wrap: wrap;
+ margin: 0 -10px 30px -10px;
+}
+#order .data .row .box {
+ box-sizing: border-box;
+ flex: 0 0 20%;
+}
+#order .data .row .box .item {
+ margin: 10px;
+ border: 1px solid #DDDDDD;
+ background-color: #E3E3E3;
+ padding: 16px;
+}
+#order .data .row .box .item h2 {
+ border-bottom: 1px solid #BBBBBB;
+ color: #000;
+ font-size: 13px;
+ font-weight: bold;
+ padding-bottom: 10px;
+ margin-bottom: 15px;
+}
+#order .data .row .box .item .num {
+ font-size: 20px;
+ color: #535353;
+}

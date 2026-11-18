@@ -1,0 +1,302 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main has-submenu">
+   {include file="inc/submenu.tpl"}
+   <div class="dou-page">
+     <!-- {if $rec eq 'default'} 会员列表 -->
+     {include file="inc/page_header.tpl"}
+     <div class="filter">
+      <form action="{url link='admin.user'}" method="get" onsubmit="return hideEmpty(this)">
+       <input name="username" type="text" class="input" value="{$username}" size="30" placeholder="{$lang.user_search_placeholder}" />
+       <select name="status" class="select">
+        <option value="">{$lang.user_status_all}</option>
+        <!-- {foreach from=$status_options item=opt} -->
+        <option value="{$opt.value}"{if $status_filter eq $opt.value} selected="selected"{/if}>{$opt.format}</option>
+        <!-- {/foreach} -->
+       </select>
+       <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+       <a class="btn-secondary" href="{url link='admin.user'}">{$lang.btn_reset}</a>
+      </form>
+     </div>
+     <div id="list">
+      <form name="action" method="post" action="{url link='admin.user.action'}">
+       <input type="hidden" name="token" value="{$token}" />
+       <table class="table">
+        <tr>
+         <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+         <th class="m-none text-center" width="40">{$lang.record_id}</th>
+         <th class="text-left">{$lang.user_username}</th>
+         <th class="text-center">{$lang.user_user_sn}</th>
+         <th class="text-center">{$lang.user_status}</th>
+         <!-- {if $features.money} -->
+         <th class="m-none text-center">{$lang.money}</th>
+         <!-- {/if} -->
+         <!-- {if $features.vip} -->
+         <th class="m-none text-center">{$lang.vip_log}</th>
+         <!-- {/if} -->
+         <!-- {if $features.point} -->
+         <th class="m-none text-center">{$lang.user_point}</th>
+         <!-- {/if} -->
+         <!-- {if $features.money} -->
+         <th class="m-none text-center">{$lang.user_total_consumption}</th>
+         <th class="m-none text-center">{$lang.user_total_promote}</th>
+         <!-- {/if} -->
+         <!-- {if $has_user_level_data} -->
+         <th class="m-none text-center">{$lang.user_level}</th>
+         <!-- {/if} -->
+         <th class="m-none text-center">{$lang.user_login_count}</th>
+         <th class="m-none text-center">{$lang.user_last_login}</th>
+         <th class="m-none text-center">{$lang.user_created_at}</th>
+         <th width="80" class="text-center">{$lang.handler}</th>
+        </tr>
+        <!-- {foreach from=$user_list item=user} -->
+        <tr>
+         <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$user.id}" /></td>
+         <td class="m-none text-center">{$user.id}</td>
+         <td><a href="{url link='admin.user.edit' id=$user.id}">{$user.user.username}</a></td>
+         <td class="text-center">{$user.user_sn}</td>
+         <td class="text-center"><span class="user-status user-status-{$user.status}">{$user.status_format}</span></td>
+         <!-- {if $features.money} -->
+         <td class="m-none text-center">{$user.money_total}<br>
+          {$lang.money_log}</td>
+         <!-- {/if} -->
+         <!-- {if $features.vip} -->
+         <td class="m-none text-center">{$user.vip.text}{$user.vip.start_at}-{$user.vip.end_at}</td>
+         <!-- {/if} -->
+         <!-- {if $features.point} -->
+         <td class="m-none text-center">{$user.point}</td>
+         <!-- {/if} -->
+         <!-- {if $features.money} -->
+         <td class="m-none text-center">{$user.total_consumption}</td>
+         <td class="m-none text-center">{$user.total_promote}</td>
+         <!-- {/if} -->
+         <!-- {if $has_user_level_data} -->
+         <td class="m-none text-center">{$user.level_name}<br /><a href="{$user.level_log_url}">{$lang.user_level_log_view}</a></td>
+         <!-- {/if} -->
+         <td class="m-none text-center">{$user.login_count}</td>
+         <td class="m-none text-center">{$user.last_login}<br /><a href="{$user.last_login_log_url}">{$lang.user_log_view}</a></td>
+         <td class="m-none text-center">{$user.created_at}</td>
+         <td class="text-center"><a href="{url link='admin.user.edit' id=$user.id}">{$lang.edit}</a> | <a href="javascript:;" class="js-delete" data-url="{url link='admin.user.destroy' id=$user.id}">{$lang.del}</a></td>
+        </tr>
+        <!-- {/foreach} -->
+       </table>
+       <div class="action">
+        <select class="select" name="action">
+         <option value="0">{$lang.select}</option>
+         <option value="del_all">{$lang.del}</option>
+         <!-- {if $excel} -->
+         <option value="excel">{$lang.excel_export}</option>
+         <option value="excel_all">{$lang.excel_export_all}</option>
+         <!-- {/if} -->
+        </select>
+        <input class="btn" type="submit" value="{$lang.btn_execute}" />
+       </div>
+      </form>
+     </div>
+     {include file="inc/pager.tpl"}
+     <!-- {/if} -->
+     <!-- {if $rec eq 'create' || $rec eq 'edit'} 会员信息编辑 -->
+     {include file="inc/page_header.tpl"}
+     <!-- {if $rec eq 'edit'} 会员状态管理 -->
+     <div class="form">
+      <div class="form-item">
+       <div class="form-label">{$lang.user_status}</div>
+       <div class="input-block">
+        <span class="user-status user-status-{$user.status}">{$user.status_format}</span>
+        <!-- {foreach from=$user.status_actions item=act} -->
+        <form method="post" action="{url link='admin.user.set_status'}" style="display:inline; margin-left:8px;">
+         <input type="hidden" name="token" value="{$token}" />
+         <input type="hidden" name="user_id" value="{$user.id}" />
+         <input type="hidden" name="new_status" value="{$act.value}" />
+         <input class="btn-secondary" type="submit" value="{$act.label}" onclick="return confirm('{$lang.user_status_confirm}');" />
+        </form>
+        <!-- {/foreach} -->
+       </div>
+      </div>
+     </div>
+     <!-- {/if} -->
+     <form action="{$form_action}" method="post" enctype="multipart/form-data"><input type="hidden" name="_method" value="{$form_method}" />
+      <div class="form">
+       <div class="form-item">
+        <div class="form-label">{$lang.user_username}<i>*</i></div>
+        <div class="input-block">
+         <div class="form gray">
+          <div class="form-item">
+           <div class="form-label">{$lang.user_mobile}</div>
+           <div class="input-block">
+            <input type="text" name="mobile" value="{$user.mobile}" size="80" class="input" />
+           </div>
+          </div>
+          <div class="form-item">
+           <div class="form-label">{$lang.user_email}</div>
+           <div class="input-block">
+            <input type="text" name="email" value="{$user.email}" size="80" class="input" />
+           </div>
+          </div>
+         </div>
+         <p class="cue">{$lang.user_username_cue}</p>
+        </div>
+       </div>
+       <!-- {if $rec eq 'create'} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_password}<i>*</i></div>
+        <div class="input-block">
+         <input name="password" type="password" class="input" size="36" />
+         <p id="password" class="cue"></p>
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_password_confirm}<i>*</i></div>
+        <div class="input-block">
+         <input name="password_confirm" type="password" class="input" size="36" />
+         <p id="password_confirm" class="cue"></p>
+        </div>
+       </div>
+       <!-- {else} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_password_new}</div>
+        <div class="input-block">
+         <input type="password" name="password" class="input" size="36" autocomplete="new-password" />
+         <span class="cue ml">{$lang.user_password_new_cue}</span></div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_password_new_confirm}</div>
+        <div class="input-block">
+         <input type="password" name="password_confirm" class="input" size="36" autocomplete="new-password" />
+        </div>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $site.language.default eq 'en_us'} -->
+       <div class="form-item">
+        <div class="form-field-inline">
+         <div class="form-label">{$lang.user_first_name}：</div>
+         <div class="input-block">
+          <input type="text" name="first_name" value="{$user.first_name}" size="30" class="input" />
+         </div>
+        </div>
+        <div class="form-field-inline">
+         <div class="form-label">{$lang.user_last_name}：</div>
+         <div class="input-block">
+          <input type="text" name="last_name" value="{$user.last_name}" size="30" class="input" />
+         </div>
+        </div>
+       </div>
+       <!-- {else} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact}</div>
+        <div class="input-block">
+         <input type="text" name="contact" value="{$user.contact}" size="80" class="input" />
+        </div>
+       </div>
+       <!-- {/if} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_phone}</div>
+        <div class="input-block">
+         <input type="text" name="phone" value="{$user.phone}" size="80" class="input" />
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_address}</div>
+        <div class="input-block">
+         <!-- {if $site.language.default eq 'en_us'} -->
+         <input type="text" name="country" value="{$user.country}" size="20" class="input" />
+         <input type="text" name="province" value="{$user.province}" size="20" class="input" />
+         <br>
+         <br>
+         <!-- {/if} -->
+         <input type="text" name="address" value="{$user.address}" size="80" class="input" />
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_postcode}</div>
+        <div class="input-block">
+         <input type="text" name="postcode" value="{$user.postcode}" size="80" class="input" />
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_sex}</div>
+        <div class="input-block">
+         <label for="sex_1">
+          <input type="radio" name="sex" id="sex_1" value="1"{if $user.sex eq '1' || !$user} checked="true"{/if}>
+          {$lang.user_man}</label>
+         <label for="sex_0">
+          <input type="radio" name="sex" id="sex_0" value="0"{if $user.sex eq '0'} checked="true"{/if}>
+          {$lang.user_woman}</label>
+         {$wrong.sex} </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_avatar}</div>
+        <div class="input-block">
+         <input type="file" name="avatar" />
+         <!-- {if $user.avatar} -->
+         <p style="margin-top: 5px;"><a href="{$user.avatar}" target="_blank"><img src="{$user.avatar}" height="80"></a></p>
+         <!-- {/if} -->
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_nickname}</div>
+        <div class="input-block">
+         <input type="text" name="nickname" value="{$user.nickname}" size="80" class="input" />
+        </div>
+       </div>
+       <!-- {if $user_level_option} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_level}</div>
+        <div class="input-block">
+         <select class="select" name="level_id">
+          <option value="0">{$lang.user_level_no}</option>
+          <!-- {foreach from=$user_level_option item=level} -->
+          <option value="{$level.level_id}"{if $level.cur} selected="selected"{/if}>{$level.name}</option>
+          <!-- {/foreach} -->
+         </select>
+        </div>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $distribution_level_option} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_distribution_level}</div>
+        <div class="input-block">
+         <select class="select" name="distribution_level_id">
+          <option value="0">{$lang.user_distribution_level_no}</option>
+          <!-- {foreach from=$distribution_level_option item=dlevel} -->
+          <option value="{$dlevel.value}"{if $dlevel.selected} selected="selected"{/if}>{$dlevel.label}</option>
+          <!-- {/foreach} -->
+         </select>
+        </div>
+       </div>
+       <!-- {/if} -->
+       <div class="form-item submit">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="user_id" value="{$user.id}">
+        <input class="btn" type="submit" value="{$lang.btn_submit}" />
+       </div>
+      </div>
+     </form>
+     <!-- {/if} -->
+    </div>
+
+  </div>
+ </div>
+ {include file="inc/footer.tpl"} </div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+{literal}onload = function() {document.forms['action'].reset();}{/literal}
+</script>
+<!-- {/if} -->
+</body>
+</html>

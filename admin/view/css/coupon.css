@@ -1,0 +1,26 @@
+/* 优惠券模块
+----------------------------------------------- */
+
+/* 商品范围选择 — 已选商品 chip 与搜索结果（coupon.htm） */
+.coupon-product-chip {
+  display: inline-block;
+  margin: 6px 8px 0 0;
+  padding: 3px 8px;
+  background: #f2f5f7;
+  border-radius: 3px;
+}
+.coupon-product-chip .js-coupon-product-remove {
+  margin-left: 6px;
+  color: #df3033;
+}
+.js-coupon-product-results {
+  margin-top: 8px;
+}
+.js-coupon-product-results a {
+  display: block;
+  padding: 4px 0;
+  color: #333;
+}
+.js-coupon-product-results a:hover {
+  color: #df3033;
+}

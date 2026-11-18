@@ -1,0 +1,552 @@
+/**
+ * 云端扩展列表（模块 / 模板 / 插件 / 小程序安装页）
+ */
+/* 云中心
+----------------------------------------------- */
+.cloud .filter a {
+  margin-right: 20px;
+}
+.cloud .handbook {
+  margin-bottom: 20px;
+}
+/*- handle -*/
+.cloud .handle h2 {
+  background: url(../images/icon_cloud_handle.png) no-repeat left center;
+  padding-left: 45px;
+  font-size: 25px;
+  margin-bottom: 20px;
+}
+.cloud .handle p {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #555;
+}
+.cloud .handle a {
+  margin-right: 15px;
+}
+.cloud .handle i {
+  margin: 0 8px;
+}
+/*- order -*/
+.cloud .order h2 {
+  background: url(../images/icon_cloud_order.png) no-repeat left top;
+  height: 46px;
+  padding-left: 45px;
+  font-size: 18px;
+}
+.cloud .order li {
+  margin-bottom: 10px;
+}
+.cloud .order em {
+  color: #999;
+}
+.cloud .order .btn,
+.cloud .order .btn-danger {
+  margin-top: 20px;
+}
+/*- account -*/
+.cloud .account {
+  text-align: center;
+  margin-top: 150px;
+}
+.cloud .account .account-title {
+  font-size: 30px;
+  font-weight: normal;
+  color: #19b4ea;
+  margin-bottom: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cloud .account .account-title i {
+  font-size: 56px;
+  margin-right: 12px;
+}
+.cloud .account .input {
+  margin-right: 20px;
+}
+.cloud .account em {
+  font-size: 18px;
+  margin-right: 20px;
+  color: #19b4ea;
+}
+.cloud .account .guide {
+  margin-top: 60px;
+  color: #999;
+}
+.cloud .account .guide a {
+  color: #19b4ea;
+}
+.cloud .account .buy {
+  margin-top: 60px;
+}
+.cloud .account .buy a {
+  color: #19b4ea;
+  border: 1px solid #19b4ea;
+  padding: 10px 40px;
+  font-size: 14px;
+}
+.cloud .account .buy a:hover {
+  background-color: #19b4ea;
+  color: #fff;
+}
+
+/* -- 筛选 Tab -- */
+.cloud .cloud-filter-tabs {
+  margin-top: 15px;
+}
+.cloud .cloud-filter-tabs a {
+  display: inline-block;
+  padding: 4px 30px;
+  border: 1px solid #ddd;
+  margin-right: 10px;
+  cursor: pointer;
+}
+.cloud .cloud-filter-tabs a.cloud-tab-active {
+  color: #19b4ea;
+}
+/* -- 扩展卡片列表（文本布局，三列网格） -- */
+.cloud .cloud-extend-list {
+  zoom: 1;
+  overflow: hidden;
+  padding: 15px 0 0;
+}
+.cloud .cloud-extend-list .cloud-extend-box {
+  width: 33.3333%;
+  float: left;
+  padding-right: 20px;
+  box-sizing: border-box;
+}
+.cloud .cloud-extend-list .cloud-extend-box:nth-child(3n) {
+  padding-right: 0;
+}
+.cloud .cloud-extend-list .cloud-extend-box.cloud-extend-box--col .cloud-extend-item {
+  margin-right: 0;
+}
+@media (max-width: 1200px) {
+  .cloud .cloud-extend-list .cloud-extend-box {
+    width: 50%;
+  }
+  .cloud .cloud-extend-list .cloud-extend-box:nth-child(3n) {
+    padding-right: 20px;
+  }
+  .cloud .cloud-extend-list .cloud-extend-box:nth-child(2n) {
+    padding-right: 0;
+  }
+}
+@media (max-width: 768px) {
+  .cloud .cloud-extend-list .cloud-extend-box {
+    width: auto;
+    float: none;
+    padding-right: 0;
+  }
+}
+.cloud .cloud-extend-list .cloud-extend-item {
+  border: 1px solid #ddd;
+  background-color: #f5f5f5;
+  margin-bottom: 20px;
+}
+.cloud .cloud-extend-list .cloud-extend-item:hover {
+  border: 1px solid #a0e2f8;
+  box-shadow: 0 0 15px 0 rgb(0 0 0 / 10%);
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head {
+  padding: 15px;
+  line-height: 24px;
+}
+/* 卡片名称比分组标题小一档，拉开视觉层级 */
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head .cloud-extend-name {
+  font-size: 16px;
+  font-weight: bold;
+  height: 25px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head .cloud-extend-name em {
+  display: inline-block;
+  font-size: 12px;
+  padding: 0 10px;
+  background-color: #fff;
+  line-height: 22px;
+  border-radius: 11px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head .cloud-extend-count {
+  float: right;
+  color: #999;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-info {
+  padding: 0 15px 5px 15px;
+  color: #666;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-info span {
+  margin-right: 20px;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-info span b {
+  color: #777;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-desc {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  padding: 0 15px;
+  color: #999;
+  height: 20px;
+  font-size: 13px;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-actions {
+  padding: 10px 15px 15px 15px;
+  line-height: 22px;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-actions a,
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-actions em {
+  display: inline-block;
+  border: 1px solid #ddd;
+  padding: 0 15px;
+  margin-right: 10px;
+  text-decoration: none;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-actions a:hover {
+  background-color: #19b4ea;
+  border: 1px solid #19b4ea;
+  color: #fff;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-actions .cloud-extend-price {
+  float: right;
+  color: #999;
+}
+/* -- 安装状态标识（模块 / 插件 / 模板云列表共用，仅两态：未安装灰 / 已安装绿） -- */
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head .cloud-extend-state {
+  float: right;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #888;
+  background: #fff;
+  border: 1px solid #d5d5d5;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head .cloud-extend-state--install {
+  color: #999;
+  background: #f5f5f5;
+  border-color: #e0e0e0;
+}
+.cloud .cloud-extend-list .cloud-extend-item .cloud-extend-head .cloud-extend-state--installed {
+  color: #389e0d;
+  background: #f0f9eb;
+  border-color: #b7eb8f;
+}
+/* 已安装：卡片弱化，名称与安装按钮转灰 */
+.cloud .cloud-extend-list .cloud-extend-item--installed {
+  background-color: #fafafa;
+  border-color: #e6e6e6;
+}
+.cloud .cloud-extend-list .cloud-extend-item--installed .cloud-extend-name {
+  color: #666;
+}
+.cloud .cloud-extend-list .cloud-extend-item--installed .cloud-extend-actions em {
+  color: #999;
+  background-color: #f0f0f0;
+  border-color: #e0e0e0;
+}
+/* 待更新：仅高亮更新按钮，不整卡高亮 */
+.cloud .cloud-extend-list .cloud-extend-item--update .cloud-extend-actions a:first-of-type {
+  color: #fff;
+  background-color: #19b4ea;
+  border-color: #19b4ea;
+}
+/* -- 模板图片网格 -- */
+.cloud .cloud-theme-list {
+  padding: 15px 0;
+  zoom: 1;
+  overflow: hidden;
+}
+.cloud .cloud-theme-list .cloud-theme-card {
+  border: 1px solid #ddd;
+  width: 258px;
+  background-color: #fff;
+  float: left;
+  margin: 0 20px 20px 0;
+  padding-bottom: 5px;
+}
+@media (max-width: 768px) {
+  .cloud .cloud-theme-list .cloud-theme-card {
+    width: auto;
+    float: none;
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+  }
+}
+.cloud .cloud-theme-list .cloud-theme-card > p {
+  margin: 4px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #eee;
+  overflow: hidden;
+}
+.cloud .cloud-theme-list .cloud-theme-card .cloud-theme-thumb {
+  height: 157px;
+}
+.cloud .cloud-theme-list .cloud-theme-card .cloud-theme-thumb img {
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.6s;
+}
+.cloud .cloud-theme-list .cloud-theme-card .cloud-theme-thumb img:hover {
+  transform: scale(1.1);
+}
+.cloud .cloud-theme-list .cloud-theme-card.cloud-theme-card--mobile {
+  width: 178px;
+  margin-right: 40px;
+}
+.cloud .cloud-theme-list .cloud-theme-card.cloud-theme-card--mobile .cloud-theme-thumb img {
+  width: 170px;
+  height: 230px;
+}
+.cloud .cloud-theme-list .cloud-theme-card dt {
+  font-weight: bold;
+  padding: 10px 10px 5px 10px;
+}
+.cloud .cloud-theme-list .cloud-theme-card dd {
+  padding: 2px 10px;
+}
+.cloud .cloud-theme-list .cloud-theme-card dd.cloud-need-module {
+  height: 40px;
+  overflow-y: auto;
+  color: #999;
+  border-top: 1px solid #eee;
+  padding-top: 5px;
+  margin-top: 5px;
+}
+.cloud .cloud-theme-list .cloud-theme-card dd.cloud-need-module b {
+  font-weight: normal;
+  color: #555;
+}
+.cloud .cloud-theme-list .cloud-theme-card dd.cloud-btn-row span a {
+  color: #0072c6;
+  margin-right: 10px;
+}
+.cloud .cloud-theme-list .cloud-theme-card dd.cloud-btn-row span em {
+  margin-right: 10px;
+}
+.cloud .cloud-theme-list .cloud-theme-card dd.cloud-btn-row .del {
+  float: right;
+  color: #999;
+}
+/* -- 模板卡片安装状态：只改边框色，区分三态（绿已装 / 蓝可更新 / 默认未装） -- */
+.cloud .cloud-theme-list .cloud-theme-card--installed {
+  border-color: #b7eb8f;
+  background-color: #fafafa;
+}
+.cloud .cloud-theme-list .cloud-theme-card--installed dt {
+  color: #666;
+}
+.cloud .cloud-theme-list .cloud-theme-card--update {
+  border-color: #19b4ea;
+}
+.cloud .cloud-theme-list .cloud-theme-card--update dd.cloud-btn-row span a:first-child {
+  color: #19b4ea;
+  font-weight: bold;
+}
+/* -- 分页 -- */
+.cloud .cloud-pager {
+  clear: both;
+}
+.cloud .cloud-pager-pages {
+  margin-top: 10px;
+}
+.cloud .cloud-pager-pages a,
+.cloud .cloud-pager-pages span.cloud-page-active {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 4px 10px;
+  border: 1px solid #ddd;
+}
+.cloud .cloud-pager-pages span.cloud-page-active {
+  color: #19b4ea;
+  border-color: #19b4ea;
+}
+.cloud .cloud-pager-pages a:hover {
+  border-color: #19b4ea;
+  color: #19b4ea;
+}
+/* -- 弹窗按钮（云列表内，与 extend-actions 并列） -- */
+.cloud .cloud-action-btn {
+  display: inline-block;
+  border: 1px solid #ddd;
+  padding: 0 15px;
+  margin-right: 10px;
+  text-decoration: none;
+  line-height: 22px;
+  background-color: #ddd;
+  color: #666;
+}
+.cloud .cloud-action-btn:hover {
+  background-color: #19b4ea;
+  border: 1px solid #19b4ea;
+  color: #fff;
+}
+.cloud .cloud-action-btn.cloud-action-btn--muted {
+  background-color: #ddd;
+  color: #666;
+}
+
+/* -- 在线安装（cloud/install）失败行红色提示 -- */
+.cloud .handle p.error {
+  color: #d9534f;
+}
+
+/* -- 安装日志当前步骤的进行中旋转图标，步骤完成或失败时被 JS 移除 -- */
+#dou-install-log .install-step-spinner {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 1;
+  color: #b7b7b7;
+  animation: install-step-spin 1s linear infinite;
+}
+@keyframes install-step-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -- 进行中行的进度文本（旋转图标前）：真实百分比 N%，拿不到时显示「已用时 N 秒」秒表 -- */
+#dou-install-log .install-step-progress {
+  display: inline-block;
+  margin-left: 6px;
+  color: #999;
+}
+
+/* -- 安装/更新完成（及失败）后的操作按钮行：用 padding-top 而非 margin，
+     避开与上方日志行 margin-bottom 的外边距合并，间距恒定 12px + 16px = 28px -- */
+#dou-install-log .install-action-row {
+  padding-top: 16px;
+}
+
+/* -- 更新主页（cloud/update）-- */
+/* 区块间距、批量按钮与「已是最新版」提示的样式全部由云端 static/css/update.css 提供；
+   本地仅保留云端不可达时的兜底提示样式（此时云端样式表不会被加载）。
+   类名用 update-fallback 而非 update-empty：后者已被云端 update.css 占用（空态大留白），
+   同名会因优先级更高而反向覆盖云端样式。 */
+.cloud .update-fallback {
+  margin-top: 40px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #535353;
+  background-color: #f2f2f2;
+  border: 1px solid #d5d5d5;
+}
+/* -- 离线升级（cloud/offline） -- */
+.cloud .offline {
+  font-size: 14px;
+}
+.cloud .offline .offline-version {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #535353;
+  background-color: #f2f2f2;
+  border: 1px solid #d5d5d5;
+}
+.cloud .offline .offline-version em {
+  margin-left: 4px;
+  color: #000;
+  font-style: normal;
+  font-weight: bold;
+}
+.cloud .offline code {
+  background-color: #f0f0f0;
+  padding: 1px 6px;
+  word-break: break-all;
+  user-select: all;
+}
+.cloud .offline .offline-copy {
+  margin-left: 10px;
+  color: #0072c6;
+}
+.cloud .offline .offline-pkg-state {
+  display: inline-block;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #888;
+  background-color: #fff;
+  border: 1px solid #d5d5d5;
+  white-space: nowrap;
+}
+.cloud .offline .offline-pkg-state--newer {
+  color: #389e0d;
+  background-color: #f0f9eb;
+  border-color: #b7eb8f;
+}
+.cloud .offline .offline-pkg-state--same {
+  color: #1d6fb8;
+  background-color: #eef6ff;
+  border-color: #b6d8f5;
+}
+.cloud .offline .offline-pkg-state--older,
+.cloud .offline .offline-pkg-state--invalid {
+  color: #d9534f;
+  background-color: #fdf2f2;
+  border-color: #f0c0bd;
+}
+
+/*- cloud-frame -*/
+.cloud-frame .bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000001;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  filter: alpha(opacity=45);
+  opacity: 0.45;
+}
+.cloud-frame .frame {
+  position: fixed;
+  _position: absolute;
+  z-index: 10000002;
+  overflow: hidden;
+  padding: 0;
+  left: 50%;
+}
+.cloud-frame .frame h2 {
+  padding: 0 10px;
+  background: #0072c6;
+  line-height: 32px;
+  color: #fff;
+  font-size: 14px;
+}
+.cloud-frame .frame h2 .close {
+  background: url(../images/icon_fork.png) no-repeat;
+  width: 12px;
+  height: 12px;
+  display: block;
+  float: right;
+  text-indent: -9999px;
+  margin-top: 11px;
+}
+.cloud-frame .details {
+  border: 2px solid #c4c4c4;
+  background-color: #fff;
+  width: 800px;
+  top: 100px;
+  margin-left: -400px;
+}
+.cloud-frame .select-box {
+  border: 2px solid #fff;
+  background-color: #f5f5f5;
+  width: 400px;
+  top: 300px;
+  margin-left: -200px;
+  text-align: center;
+  padding: 10px 0 30px 0;
+}
+.cloud-frame .select-box a {
+  margin: 0 25px;
+}
+

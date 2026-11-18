@@ -1,0 +1,267 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/aftersale.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div id="aftersale" class="dou-page">
+   <!-- {if $rec eq 'default'} 售后列表 -->
+   {include file="inc/page_header.tpl"}
+   <div class="filter">
+    <form action="{url link='admin.aftersale'}" method="get" onsubmit="return hideEmpty(this)">
+     <input name="aftersale_sn" type="text" class="input" value="{$req.aftersale_sn}" placeholder="售后编号" size="20" />
+     <script type="text/javascript" src="js/laydate/laydate.js"></script>
+     <input type="text" id="time_start" name="time_start" value="{$req.time_start}" class="input" placeholder="开始时间" autocomplete="off" />
+     <input type="text" id="time_end" name="time_end" value="{$req.time_end}" class="input" placeholder="截止时间" autocomplete="off" />
+     <script>
+     {literal}
+     laydate.render({
+       elem: '#time_start',
+       type: 'datetime'
+     });
+     laydate.render({
+       elem: '#time_end',
+       type: 'datetime'
+     });
+     {/literal}
+     </script>
+     <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+     <a class="btn-secondary" href="{url link='admin.aftersale'}">{$lang.btn_reset}</a>
+    </form>
+   </div>
+   <div class="list">
+    <form name="action" method="post" action="{url link='admin.aftersale'}">
+     <input type="hidden" name="token" value="{$token}" />
+     <table class="table">
+      <tr>
+       <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+       <th class="m-none text-center" width="40">{$lang.record_id}</th>
+       <th width="60" class="text-center">{$lang.aftersale_aftersale_sn}</th>
+       <th class="m-none text-center">{$lang.order_order_sn}</th>
+       <th class="m-none text-left">{$lang.aftersale_user}</th>
+       <th class="m-none text-left">{$lang.aftersale_item_list}</th>
+       <th class="m-none text-center" width="100">{$lang.aftersale_aftersale_money}</th>
+       <th width="80" class="text-center">{$lang.aftersale_status}</th>
+       <th class="m-none text-center" width="120">{$lang.aftersale_created_at}</th>
+       <th width="80" class="text-center">{$lang.handler}</th>
+      </tr>
+      <!-- {foreach from=$aftersale_list item=aftersale} -->
+      <tr>
+       <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$aftersale.id}" /></td>
+       <td class="m-none text-center">{$aftersale.id}</td>
+       <td class="text-center">{$aftersale.aftersale_sn}</td>
+       <td class="m-none text-center"><a href="{url link='admin.order.show' order_id=$aftersale.order.order_id}">{$aftersale.order.order_sn}</a> {$aftersale.order.product.name}</td>
+       <td class="m-none"><a href="{url link='admin.user.edit' id=$aftersale.user.id}">{$aftersale.user.email}</a></td>
+       <td class="m-none text-left"><!-- {foreach from=$aftersale.item_list item=item} -->
+        <img title="{$item.name}" src="{$item.thumb}" width="30" height="30" />
+        <!-- {/foreach} --></td>
+       <td class="m-none text-center">{$aftersale.aftersale_money}</td>
+       <td class="{$aftersale.status.class} text-center">{$aftersale.status.format}</td>
+       <td class="m-none text-center">{$aftersale.created_at}</td>
+       <td class="text-center"><a href="{url link='admin.aftersale.show' id=$aftersale.id}">{$lang.view}</a></td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+    </form>
+   </div>
+   {include file="inc/pager.tpl"}
+   <!-- {/if} -->
+   <!-- {if $rec eq 'show'} 售后详情 -->
+   <div class="details">
+   {include file="inc/page_header.tpl"}
+    <table class="table">
+      <tr>
+       <td class="td-title">{$lang.aftersale_aftersale_sn}：</td>
+       <td>{$aftersale.aftersale_sn} <em class="text">（{$aftersale.status.format}）</em></td>
+      </tr>
+      <tr>
+       <td>{$lang.aftersale_type}：</td>
+       <td><em class="text">{$aftersale.type_format}</em></td>
+      </tr>
+      <tr>
+       <td>{$lang.aftersale_created_at}：</td>
+       <td><em class="text">{$aftersale.created_at}</em></td>
+      </tr>
+      <tr>
+       <td>{$lang.order_order_sn}：</td>
+       <td><a href="{url link='admin.order.show' order_id=$aftersale.order.order_id}">{$aftersale.order.order_sn}</a> <em class="text">（{$lang.order_shipped_at}：{$aftersale.order.shipped_at}，{$lang.order_order_amount}：{$aftersale.order.order_amount_format}）</em></td>
+      </tr>
+      <tr>
+       <td>{$lang.aftersale_reason}：</td>
+       <td><em class="text">{$aftersale.reason}</em></td>
+      </tr>
+      <tr>
+       <td class="td-title v-top">{$lang.aftersale_image}：</td>
+       <td>
+        <!-- {foreach from=$aftersale.img_list item=item} -->
+        <a href="{$item.file}" target="_blank"><img src="{$item.file}" height="120" /></a>
+        <!-- {/foreach} -->
+       </td>
+      </tr>
+      <tr>
+       <td class="td-title v-top">{$lang.aftersale_item_list}：</td>
+       <td><div class="item-list">
+         <!-- {foreach from=$aftersale.item_list item=item} -->
+         <dl>
+          <dt><img title="{$item.name}" src="{$item.thumb}" width="30" height="30" /></dt>
+          <dd>
+           <p>{$item.name}</p>
+           <span>{$item.price} <em class="text">x {$item.item_number}</em></span> </dd>
+         </dl>
+         <!-- {/foreach} -->
+        </div></td>
+      </tr>
+      <tr>
+       <td>{$lang.aftersale_user}：</td>
+       <td><em class="text">{$lang.user_user_sn}：</em><a href="{url link='admin.user.edit' id=$aftersale.user.id}">{$aftersale.user.user_sn}</a>，<em class="text">{$lang.user_email}：</em>{$aftersale.user.email}</td>
+      </tr>
+      <tr>
+       <td>{$lang.aftersale_amount_detail}：</td>
+       <td><em class="text">{$lang.aftersale_apply_amount}：{$aftersale.apply_amount_format}　{$lang.aftersale_approved_amount}：{$aftersale.approved_amount_format}　{$lang.aftersale_refunded_amount}：<b class="c-red">{$aftersale.refunded_amount_format}</b></em></td>
+      </tr>
+    </table>
+
+    <!-- {if $aftersale.return_info} 买家寄回物流 -->
+    <div class="section-title">{$lang.aftersale_return_info}</div>
+    <table class="table">
+     <tr><td class="td-title">{$lang.aftersale_return_company}：</td><td><em class="text">{$aftersale.return_info.shipping_company}</em></td></tr>
+     <tr><td>{$lang.aftersale_return_sn}：</td><td><em class="text">{$aftersale.return_info.tracking_no}</em></td></tr>
+     <tr><td>{$lang.aftersale_return_time}：</td><td><em class="text">{$aftersale.return_info.shipped_at_format}</em></td></tr>
+    </table>
+    <!-- {/if} -->
+
+    <!-- 状态机操作 -->
+    <div class="section-title">{$lang.aftersale_operation}</div>
+    <table class="table">
+     <!-- {if $aftersale.can_approve} -->
+     <tr>
+      <td class="td-title">{$lang.aftersale_approve}：</td>
+      <td>
+       <form action="{url link='admin.aftersale.approve'}" method="post">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$aftersale.id}" />
+        {$lang.aftersale_approved_amount}（{$aftersale.currency_code}）：<input type="text" name="approved_amount" size="10" class="input" value="{$aftersale.approve_default}" />
+        {$lang.aftersale_handle_record}：<input type="text" name="note" size="30" class="input" value="" />
+        <input class="btn" type="submit" value="{$lang.aftersale_approve}" />
+       </form>
+      </td>
+     </tr>
+     <!-- {/if} -->
+     <!-- {if $aftersale.can_receive} -->
+     <tr>
+      <td class="td-title">{$lang.aftersale_receive}：</td>
+      <td>
+       <form action="{url link='admin.aftersale.receive'}" method="post" onsubmit="return confirm('{$lang.aftersale_receive_confirm}');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$aftersale.id}" />
+        <input class="btn" type="submit" value="{$lang.aftersale_receive}" />
+       </form>
+      </td>
+     </tr>
+     <!-- {/if} -->
+     <!-- {if $aftersale.can_dispatch} -->
+     <tr>
+      <td class="td-title">{$lang.aftersale_dispatch_refund}：</td>
+      <td>
+       <form action="{url link='admin.aftersale.dispatch_refund'}" method="post" onsubmit="return confirm('{$lang.aftersale_dispatch_confirm}');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$aftersale.id}" />
+        <input class="btn" type="submit" value="{$lang.aftersale_dispatch_refund}" />
+       </form>
+      </td>
+     </tr>
+     <!-- {/if} -->
+     <!-- {if $aftersale.can_reject} -->
+     <tr>
+      <td class="td-title">{if $aftersale.status_raw == 'refund_failed'}{$lang.aftersale_close_refund_failed}{else}{$lang.aftersale_reject}{/if}：</td>
+      <td>
+       <form action="{url link='admin.aftersale.reject'}" method="post" onsubmit="return confirm('{if $aftersale.status_raw == 'refund_failed'}{$lang.aftersale_close_refund_failed_confirm}{else}{$lang.aftersale_reject_confirm}{/if}');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$aftersale.id}" />
+        {$lang.aftersale_reject_reason}：<input type="text" name="note" size="30" class="input" value="" />
+        <input class="btn-secondary" type="submit" value="{if $aftersale.status_raw == 'refund_failed'}{$lang.aftersale_close_refund_failed}{else}{$lang.aftersale_reject}{/if}" />
+       </form>
+      </td>
+     </tr>
+     <!-- {/if} -->
+    </table>
+
+    <!-- {if $aftersale.has_pending_refunds} 待确认网关退款 -->
+    <div class="section-title">{$lang.aftersale_pending_gateway_refund}</div>
+    <table class="table">
+     <tr>
+      <th class="text-left">{$lang.aftersale_refund_sn}</th>
+      <th class="text-left">{$lang.aftersale_refund_channel}</th>
+      <th class="text-left">{$lang.aftersale_aftersale_money}</th>
+      <th class="text-left">{$lang.aftersale_created_at}</th>
+      <th width="160" class="text-center">{$lang.handler}</th>
+     </tr>
+     <!-- {foreach from=$aftersale.pending_refunds item=refund} -->
+     <tr>
+      <td>{$refund.refund_sn}</td>
+      <td>{$refund.channel}</td>
+      <td class="c-red">{$refund.amount}</td>
+      <td>{$refund.created_at}</td>
+      <td class="text-center">
+       <form action="{url link='admin.aftersale.confirm_gateway_refund'}" method="post" onsubmit="return confirm('{$lang.aftersale_confirm_gateway_confirm}');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="refund_sn" value="{$refund.refund_sn}" />
+        <input class="btn" type="submit" value="{$lang.aftersale_confirm_gateway_refund}" />
+       </form>
+       <form action="{url link='admin.aftersale.fail_gateway_refund'}" method="post" onsubmit="return confirm('{$lang.aftersale_fail_gateway_confirm}');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$aftersale.id}" />
+        <input class="btn-secondary" type="submit" value="{$lang.aftersale_fail_gateway_refund}" />
+       </form>
+      </td>
+     </tr>
+     <!-- {/foreach} -->
+    </table>
+    <!-- {/if} -->
+
+    <!-- 协商时间线 -->
+    <div class="section-title">{$lang.aftersale_timeline}</div>
+    <table class="table">
+     <tr>
+      <th width="150" class="text-left">{$lang.aftersale_created_at}</th>
+      <th width="80" class="text-left">{$lang.handler}</th>
+      <th class="text-left">{$lang.aftersale_status}</th>
+      <th class="text-left">{$lang.aftersale_handle_record}</th>
+     </tr>
+     <!-- {foreach from=$aftersale.timeline item=log} -->
+     <tr>
+      <td>{$log.created_at}</td>
+      <td>{$log.operator}</td>
+      <td><em class="text">{$log.from} → {$log.to}</em></td>
+      <td>{$log.note}</td>
+     </tr>
+     <!-- {/foreach} -->
+    </table>
+   </div>
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"}
+</div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+{literal}
+onload = function() {document.forms['action'].reset();} // 表单重置
+{/literal}
+</script>
+<!-- {/if} -->
+</body>
+</html>

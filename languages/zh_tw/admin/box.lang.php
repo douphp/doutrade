@@ -1,0 +1,34 @@
+<?php
+/**
+ * DouPHP
+ * --------------------------------------------------------------------------------------------------
+ * 版權所有 2013-2025 漳州豆殼網絡科技有限公司，並保留所有權利。
+ * 網站地址: http://www.douphp.com
+ * --------------------------------------------------------------------------------------------------
+ * 這不是一個自由軟件！您只能在遵守授權協議前提下對程序代碼進行修改和使用；不允許對程序代碼以任何形式任何目的的再發布。
+ * 授權協議: http://www.douphp.com/license.html
+ * --------------------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-01-29
+ */
+
+// 內容盒子
+$_LANG['box'] = '內容盒子';
+$_LANG['box_add'] = '添加內容';
+$_LANG['box_list'] = '內容列表';
+$_LANG['box_help_name'] = '調用時是根據分組別名，具體方式是';
+$_LANG['box_help_content'] = '{foreach from=$box_list.分組別名 item=item} 名稱：{$item.name}，分組：{$item.class}，文字內容：{$item.text}，圖片：{$item.image}，排序：{$item.sort} {/foreach}';
+
+// 字段
+$_LANG['box_name'] = '內容名稱';
+$_LANG['box_class'] = '分組（中文）';
+$_LANG['box_class_unique_id'] = '分組別名（英文）';
+$_LANG['box_text'] = '文字內容';
+$_LANG['box_link'] = '鏈接';
+$_LANG['box_image'] = '上傳內容';
+$_LANG['box_edit'] = '編輯內容';
+$_LANG['box_del'] = '刪除內容';
+$_LANG['box_add_succes'] = '添加內容成功';
+$_LANG['box_edit_succes'] = '編輯內容成功';
+
+?>

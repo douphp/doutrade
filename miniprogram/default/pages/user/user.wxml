@@ -1,0 +1,171 @@
+<!--user.wxml-->
+<view class="user-bg">
+ <navbar title="{{dou.auth.is_login ? '' : title}}" showMenu="{{false}}" backgroundColor="var(--color-primary)" titleColor="#FFF" scrollOpacity="{{data.user_head_bg.image ? navOpacity : 1}}">
+  <!-- 吸顶态：页面滚动后导航栏内淡入迷你头像 + 名称，替代头部大块会员信息（navOpacity 由 onPageScroll 驱动） -->
+  <view slot="left" class="nav-profile" style="opacity: {{navOpacity}};visibility: {{navOpacity > 0 ? 'visible' : 'hidden'}}" wx:if="{{dou.auth.is_login}}" data-url="/pages/user/edit" bindtap="douNavigateTo">
+   <view class="nav-avatar">
+    <image wx:if="{{dou.user.avatar}}" src="{{dou.user.avatar}}" mode="aspectFill" />
+    <text wx:else class="bi bi-person"></text>
+   </view>
+   <text class="nav-name">{{dou.user.user_name || dou.user.user_sn || ''}}</text>
+  </view>
+ </navbar>
+
+ <!-- 头部：配了 data.user_head_bg.image 时走沉浸式（图顶到屏幕最上沿、导航栏透明），否则回落主题色；方形头像 + 会员号/等级 + 编辑入口 -->
+ <view class="user-head" style="{{data.user_head_bg.image ? 'background-image: linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)), url(' + data.user_head_bg.image + ');margin-top: -' + navHeight + 'px;padding-top: ' + navTopPadding + 'px;' : ''}}">
+  <block wx:if="{{dou.auth.is_login}}">
+   <view class="user-profile">
+    <view class="user-avatar">
+     <image wx:if="{{dou.user.avatar}}" src="{{dou.user.avatar}}" mode="aspectFill" />
+     <text wx:else class="bi bi-person"></text>
+    </view>
+    <view class="user-info">
+     <view class="user-info-row">
+      <view class="user-info-label">{{lang.user_account}}</view>
+      <view class="user-info-val">{{dou.user.user_name || dou.user.user_sn || '-'}}</view>
+     </view>
+     <!-- VIP 模块可选安装：未安装时不做可点击跳转，仅展示等级文案 -->
+     <view class="user-info-row">
+      <view class="user-info-label">{{lang.user_level}}</view>
+      <view class="user-info-val" wx:if="{{dou.auth.is_vip && features.vip}}" data-url="/pages/vip/vip" bindtap="douNavigateTo">{{dou.user.level_name || lang.user_level_no}}</view>
+      <view class="user-info-val" wx:else>{{dou.user.level_name || lang.user_level_no}}</view>
+     </view>
+    </view>
+    <view class="user-edit bi bi-pencil-square" data-url="/pages/user/edit" bindtap="douNavigateTo"></view>
+   </view>
+  </block>
+  <!-- 未登录态整块（头像 + 文案）统一作为登录入口，避免只点小区域才有响应 -->
+  <view class="user-guest" wx:else data-url="/pages/user/login_weixin" bindtap="douNavigateTo">
+   <view class="user-avatar">
+    <text class="bi bi-person"></text>
+   </view>
+   <view class="user-info">
+    <view class="user-guest-name">{{lang.user_not_login}}</view>
+    <view class="user-guest-action">{{lang.user_tap_login}}</view>
+   </view>
+  </view>
+ </view>
+
+ <!-- 资产统计：积分 / 优惠券 / 收藏夹 -->
+ <view class="user-assets" wx:if="{{features.point || features.coupon || features.favorites}}">
+  <view class="user-asset" wx:if="{{features.point}}" data-url="/pages/point/user" bindtap="douNavigateTo">
+   <view class="user-asset-icon"><text class="bi bi-database"></text></view>
+   <view class="user-asset-text">
+    <view class="num">{{dou.user.point || 0}}</view>
+    <view class="name">{{lang.user_point}}</view>
+   </view>
+  </view>
+  <view class="user-asset" wx:if="{{features.coupon}}" data-url="/pages/coupon/user" bindtap="douNavigateTo">
+   <view class="user-asset-icon"><text class="bi bi-ticket-perforated"></text></view>
+   <view class="user-asset-text">
+    <view class="num">{{dou.user.coupon_count || 0}}</view>
+    <view class="name">{{lang.user_coupon}}</view>
+   </view>
+  </view>
+  <view class="user-asset" wx:if="{{features.favorites}}" data-url="/pages/favorites/user" bindtap="douNavigateTo">
+   <view class="user-asset-icon"><text class="bi bi-heart"></text></view>
+   <view class="user-asset-text">
+    <view class="num">{{dou.user.favorites_count || 0}}</view>
+    <view class="name">{{lang.favorites}}</view>
+   </view>
+  </view>
+ </view>
+
+ <view class="user-gap"></view>
+
+ <!-- 我的订单 -->
+ <view class="user-orders" wx:if="{{features.order}}">
+  <view class="user-block-head" data-url="/pages/order/user" bindtap="douNavigateTo">{{lang.order_my}}</view>
+  <view class="user-order-grid">
+   <view class="user-order-item" data-url="/pages/order/user" bindtap="douNavigateTo">
+    <view class="user-order-icon"><text class="bi bi-receipt"></text></view>
+    <view class="user-order-name">{{lang.all}}</view>
+   </view>
+   <view class="user-order-item" data-url="/pages/order/user?status=pending" bindtap="douNavigateTo">
+    <view class="user-order-icon"><text class="bi bi-credit-card"></text></view>
+    <view class="user-order-name">{{lang.order_status_pending}}</view>
+   </view>
+   <view class="user-order-item" data-url="/pages/order/user?status=paid" bindtap="douNavigateTo">
+    <view class="user-order-icon"><text class="bi bi-box-seam"></text></view>
+    <view class="user-order-name">{{lang.order_status_paid}}</view>
+   </view>
+   <view class="user-order-item" data-url="/pages/order/user?status=completed" bindtap="douNavigateTo">
+    <view class="user-order-icon"><text class="bi bi-file-earmark-check"></text></view>
+    <view class="user-order-name">{{lang.order_status_completed}}</view>
+   </view>
+   <view class="user-order-item" wx:if="{{features.aftersale}}" data-url="/pages/aftersale/aftersale" bindtap="douNavigateTo">
+    <view class="user-order-icon"><text class="bi bi-file-earmark-medical"></text></view>
+    <view class="user-order-name">{{lang.aftersale}}</view>
+   </view>
+  </view>
+ </view>
+
+ <view class="user-gap"></view>
+
+ <!-- 广告横幅：内容片段 data.ad_user_center（后台 → 内容片段 → 小程序内容片段） -->
+ <view class="user-banner" wx:if="{{data.ad_user_center.image}}" data-url="{{data.ad_user_center.link}}" bindtap="douNavigateTo">
+  <image class="user-banner-img" src="{{data.ad_user_center.image}}" mode="widthFix" />
+ </view>
+
+ <view class="user-gap"></view>
+
+ <!-- 常用功能：会员中心子导航（module.link_user_center） -->
+ <view class="user-panel" wx:if="{{link_user_center.user_tree.length}}">
+  <block wx:for="{{link_user_center.user_tree}}" wx:key="index" wx:for-item="tree">
+   <view class="user-row" wx:if="{{tree.module != 'aftersale'}}" data-url="{{tree.url}}" bindtap="douNavigateTo">
+    <view class="user-row-icon"><text class="{{tree.icon}}"></text></view>
+    <view class="user-row-name">{{tree.name}}</view>
+    <view class="user-row-arrow bi bi-chevron-right"></view>
+   </view>
+  </block>
+ </view>
+
+ <view class="user-gap"></view>
+
+ <!-- 常用入口：账号相关（设计稿的消息/客服/注销为占位，不接入） -->
+ <view class="user-panel">
+  <view class="user-row" wx:if="{{dou.auth.is_login}}" data-url="/pages/user/contact" bindtap="douNavigateTo">
+   <view class="user-row-icon"><text class="bi bi-person-lines-fill"></text></view>
+   <view class="user-row-name">{{lang.user_contact_manager}}</view>
+   <view class="user-row-arrow bi bi-chevron-right"></view>
+  </view>
+  <view class="user-row" wx:if="{{dou.auth.is_login}}" data-url="/pages/user/edit" bindtap="douNavigateTo">
+   <view class="user-row-icon"><text class="bi bi-person-gear"></text></view>
+   <view class="user-row-name">{{lang.user_edit}}</view>
+   <view class="user-row-arrow bi bi-chevron-right"></view>
+  </view>
+  <view class="user-row" wx:if="{{dou.auth.is_login}}" data-url="/pages/user/password" bindtap="douNavigateTo">
+   <view class="user-row-icon"><text class="bi bi-shield-lock"></text></view>
+   <view class="user-row-name">{{lang.user_password_edit}}</view>
+   <view class="user-row-arrow bi bi-chevron-right"></view>
+  </view>
+  <view class="user-row" wx:if="{{if_connect_plugin}}" data-url="/pages/user/sns" bindtap="douNavigateTo">
+   <view class="user-row-icon"><text class="bi bi-link-45deg"></text></view>
+   <view class="user-row-name">{{lang.user_sns}}</view>
+   <view class="user-row-arrow bi bi-chevron-right"></view>
+  </view>
+  <view class="user-row" wx:if="{{dou.auth.is_work && features.work}}" data-url="/pages/work/work" bindtap="douNavigateTo">
+   <view class="user-row-icon"><text class="bi bi-person-workspace"></text></view>
+   <view class="user-row-name">{{lang.work_switch}}</view>
+   <view class="user-row-arrow bi bi-chevron-right"></view>
+  </view>
+  <view class="user-row" wx:if="{{dou.auth.is_login}}" bindtap="userLogout">
+   <view class="user-row-icon"><text class="bi bi-box-arrow-right"></text></view>
+   <view class="user-row-name">{{lang.user_logout}}</view>
+   <view class="user-row-arrow bi bi-chevron-right"></view>
+  </view>
+ </view>
+
+ <view class="user-gap"></view>
+
+ <!-- 分销推广（distribution 可选安装） -->
+ <view class="promotion" wx:if="{{dou.auth.is_distribution && features.distribution}}">
+  <view class="h2">{{lang.user_promotion_link}}</view>
+  <view class="link" bindtap="copyText" data-text="{{dou.user.promotion_link}}">{{dou.user.promotion_link}}<text>{{lang.user_copy}}</text></view>
+  <view class="h2">{{lang.user_promotion_qrcode}}</view>
+  <view class="qrcode" bindtap="downloadImage" data-url="{{dou.user.promotion_qrcode}}">
+   <image src="{{dou.user.promotion_qrcode}}" mode="widthFix" /><text>{{lang.user_save_album}}</text>
+  </view>
+ </view>
+ <view class="footer" wx:if="{{lang.powered_by}}">{{lang.powered_by}}</view>
+</view>

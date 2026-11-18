@@ -1,0 +1,95 @@
+/* 评论
+----------------------------------------------- */
+#comment {
+}
+#comment h2 {
+ color: #333;
+ font-size: 16px;
+ font-weight: bold;
+ border-bottom: 1px solid #DDD;
+ margin-bottom: 15px;
+ padding-bottom: 10px;
+}
+/* post */
+#comment .post {
+}
+#comment .post .order-item {
+ background-color: #F5F5F5;
+ padding: 7px;
+}
+#comment .post .order-item .img {
+ display: inline-block;
+ margin-right: 10px;
+}
+#comment .post .order-item .img img {
+ width: 40px;
+}
+#comment .post .order-item .name {
+ display: inline-block;
+ font-size: 16px;
+ font-weight: bold;
+}
+/* comment-star */
+#comment .comment-star {
+}
+#comment .comment-star i {
+ font-size: 16px;
+ cursor: pointer;
+}
+#comment .comment-star.big i {
+ font-size: 20px;
+}
+#comment .comment-star i.active, #comment .comment-star i.hover {
+ color: #FF6408;
+}
+#comment .comment-star i.star-number {
+ font-size: 14px;
+ color: #333;
+ margin-left: 5px;
+}
+#comment .comment-star.big i.star-number {
+ font-size: 18px;
+ margin-left: 10px;
+}
+/* comment-list */
+#comment .comment-list {
+ margin-bottom: 30px;
+ line-height: 180%;
+ font-size: 13px;
+}
+#comment .comment-list dl {
+ border-bottom: 1px solid #EEE;
+ margin-bottom: 15px;
+ padding: 20px 0;
+}
+#comment .comment-list.bor {
+ border-top: 1px solid #DDD;
+}
+#comment .comment-list dt {
+ margin-bottom: 8px;
+ zoom: 1;
+ overflow: hidden;
+}
+#comment .comment-list dt a {
+ font-size: 18px;
+ color: #000;
+}
+#comment .comment-list dt span {
+ color: #999;
+ float: right;
+}
+#comment .comment-list .content {
+}
+#comment .comment-list .content p {
+ margin-bottom: 5px;
+ color: #777;
+}
+#comment .comment-list .reply {
+ margin-top: 5px;
+}
+#comment .comment-list .reply .replyContent {
+ color: #19B4EA;
+}
+#comment .comment-list .reply .replyTime {
+ color: #999;
+}

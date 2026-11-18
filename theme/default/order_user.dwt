@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="{$site.language.tag}">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/user.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+</head>
+
+<body>
+ <div id="wrapper">
+  {include file="inc/common_header.tpl"}
+  <div class="container mb">
+   <div id="user">
+    <div class="userLeft"> {include file="inc/user_tree.tpl"} </div>
+    <div class="userIn">
+     <div id="order" class="main">
+      <!-- {if $rec eq 'order_list'} 订单列表 -->
+      <h3>{$lang.order_my}</h3>
+      <div class="orderTab">
+       <!-- {foreach from=$status_list item=tab} -->
+       <a href="{$tab.url}" {if $tab.cur} class="cur" {/if}>{$tab.format}</a>
+       <!-- {/foreach} -->
+      </div>
+      <div class="orderList">
+       <!-- {foreach from=$order_list item=order} -->
+       <div class="item">
+        <div class="status"><span class="statusBadge {$order.status_class}">{$order.status_format}</span><!-- {if $order.cashier_url && $order.status eq 'pending'} -->（{$order.pay_time_limit nofilter}）<!-- {/if} --></div>
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" class="detail">
+         <tr>
+          <td class="info"><em>{$order.created_at}</em><em>{$order.contact}</em><em>{$lang.order_sn}：<a href="{url link='order.user.show' order_sn=$order.order_sn}">{$order.order_sn}</a></em></td>
+          <td class="amount">
+           <!-- {if $order.mode eq 'point'} -->
+           {$lang.order_point}：<b>{$order.order_point_format}</b>
+           <!-- {else} -->
+           {$lang.order_order_amount}：<b>{$order.order_amount_format}</b>
+           <!-- {/if} -->
+          </td>
+         </tr>
+         <tr>
+          <td class="list">
+           <div class="listBox">
+            <!-- {foreach from=$order.item_list item=item} -->
+            <dl{if $item.image} class="img" {/if}>
+             <!-- {if $item.image} -->
+             <div class="image"><a href="{$item.url}" target="_blank"><img title="{$item.name}" src="{$item.image}" width="60" /></a></div>
+             <!-- {/if} -->
+             <dt>{$item.name}<!-- {if $item.comment_url && $item.module eq 'product'} --><a class="btn-mini" href="{$item.comment_url}">{$lang.comment}</a><!-- {/if} --></dt>
+             <dd>
+              <!-- {if $order.mode eq 'point'} -->
+              {$item.point_format}
+              <!-- {else} -->
+              {$item.sale_price}<!-- {if $item.sale_price_type neq 'original'} --><i class="price-cue">{$item.sale_price_name}</i><em class="price-gray">{$item.price}</em><!-- {/if} -->
+              <!-- {/if} --> x {$item.item_number}
+             </dd>
+             </dl>
+             <!-- {/foreach} -->
+           </div>
+          </td>
+          <td class="action btnAction">
+           <a href="{$order.order_link}">{$lang.order_show}</a>
+           <!-- {if $order.if_can_aftersale} -->
+           <a href="{$order.aftersale_url}" class="btnMini">{$lang.aftersale_btn}</a>
+           <!-- {/if} -->
+           <!-- {if $order.status eq 'pending'} -->
+           <!-- {if $order.cashier_url} -->
+           <a href="{$order.cashier_url}" class="pay">{$lang.order_payment_btn}</a>
+           <!-- {/if} -->
+           <a href="javascript:;" onclick="douConfirm('{url link='order.user.cancel' order_sn=$order.order_sn token=$token}', '{$lang.order_cancel_confirm}')">{$lang.order_cancel}</a>
+           <!-- {/if} -->
+          </td>
+         </tr>
+        </table>
+       </div>
+       <!-- {/foreach} -->
+       <!-- {if !$order_list} -->
+       <div class="empty-list">{$lang.order_my}{$lang.empty_list}</div>
+       <!-- {/if} -->
+      </div>
+      {include file="inc/pager.tpl"}
+      <!-- {/if} -->
+      <!-- {if $rec eq 'order'} 订单详情 -->
+      <h3>{$lang.order_show}</h3>
+      <div class="order">
+       <div class="head">
+        <div class="title">
+         <h2>{$lang.order_sn}：{$order.order_sn}</h2>
+         <div class="action btnAction">
+          <!-- {if $order.status eq 'pending'} -->
+          <!-- {if $order.cashier_url} -->
+          <a href="{$order.cashier_url}" class="pay">{$lang.order_payment_btn}</a>
+          <!-- {/if} -->
+          <a href="javascript:;" onclick="douConfirm('{url link='order.user.cancel' order_sn=$order.order_sn token=$token}', '{$lang.order_cancel_confirm}')">{$lang.order_cancel}</a>
+          <!-- {/if} -->
+          <!-- {if $order.if_can_aftersale} -->
+          <a href="{$order.aftersale_url}" class="btnMini">{$lang.aftersale_btn}</a>
+          <!-- {/if} -->
+         </div>
+        </div>
+        <div class="subTitle">
+         <span>{$lang.order_status}：<em class="statusBadge {$order.status_class}">{$order.status_format}</em><!-- {if $order.cashier_url && $order.status eq 'pending'} -->（{$order.pay_time_limit nofilter}）<!-- {/if} --></span><span>{$lang.order_created_at}：{$order.created_at}</span>
+        </div>
+       </div>
+       <!-- {if $order.status_logs} -->
+       <div class="orderTimeline">
+        <h4>{$lang.order_log_title}</h4>
+        <ul>
+         <!-- {foreach from=$order.status_logs item=log} -->
+         <li>
+          <span class="tlTime">{$log.time}</span>
+          <span class="tlStatus">{$log.status_text}</span>
+          <span class="tlOperator">{$log.operator_text}</span>
+          <!-- {if $log.reason} --><span class="tlReason">{$log.reason}</span><!-- {/if} -->
+         </li>
+         <!-- {/foreach} -->
+        </ul>
+       </div>
+       <!-- {/if} -->
+       <table class="itemList">
+        <!-- {foreach from=$order.item_list item=item} -->
+        <tr>
+         <!-- {if $item.image} -->
+         <td width="60"><a href="{$item.url}" target="_blank"><img title="{$item.name}" src="{$item.image}" width="60" /></a></td>
+         <!-- {/if} -->
+         <td><a href="{$item.url}" target="_blank">{$item.name}</a></td>
+         <td align="center">
+          <!-- {if $order.mode eq 'point'} -->
+          {$item.point_format}
+          <!-- {else} -->
+          {$item.sale_price}<!-- {if $item.sale_price_type neq 'original'} --><i class="price-cue">{$item.sale_price_name}</i><em class="price-gray">{$item.price}</em><!-- {/if} -->
+          <!-- {/if} --> x {$item.item_number}
+         </td>
+        </tr>
+        <!-- {/foreach} -->
+       </table>
+       <div class="info-box">
+        <h2>{$lang.order_consignee}</h2>
+        <ul>
+         <li>{$lang.order_contact nofilter}：{$order.contact}</li>
+         <li>{$lang.order_phone}：{$order.phone}</li>
+         <li>{$lang.order_postcode}：{$order.postcode}</li>
+         <li>{$lang.order_address}：{$order.address}</li>
+        </ul>
+       </div>
+       <!-- {if $order.pay_name} -->
+       <div class="info-box">
+        <h2>{$lang.order_payment}</h2>
+        <ul>
+         <li>{$order.pay_name}</li>
+         <!-- {if $order.pay_evidence} -->
+         <li><img src="{$order.pay_evidence}" width="300" /></li>
+         <!-- {/if} -->
+        </ul>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $order.shipping_id} -->
+       <div class="info-box">
+        <h2>{$lang.order_shipping}</h2>
+        <ul>
+         <li>{$lang.order_shipping}：{$order.shipping_name}</li>
+         <li>{$lang.order_tracking_no}：<!-- {if $order.tracking_no} -->{$order.tracking_no}<!-- {else} -->{$lang.order_undelivered}<!-- {/if} --></li>
+        </ul>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $order.coupons} -->
+       <div class="info-box">
+        <h2>{$lang.coupon_use}</h2>
+        <ul>
+         <!-- {foreach from=$order.coupons item=coupon} -->
+         <li>{$coupon.name} <b class="price">{$coupon.amount_format}</b> <em> ({$coupon.condition_text}, {$coupon.brief})</em></li>
+         <!-- {/foreach} -->
+        </ul>
+       </div>
+       <!-- {/if} -->
+       <div class="totalAmount">
+        <!-- {if $order.mode eq 'point'} -->
+        {$lang.order_point}：<b class="price">{$order.order_point_format}</b>
+        <!-- {else} -->
+        <!-- {if $order.coupons} -->
+        {$lang.order_item_amount_gross}：<b class="price">{$order.item_amount_gross_format}</b><br />
+        <!-- {else} -->
+        {$lang.order_item_amount}：<b class="price">{$order.item_amount_format}</b><br />
+        <!-- {/if} -->
+        <!-- {if $order.shipping_id} -->
+        {$lang.order_shipping_fee}：<b class="price">{$order.shipping_fee_format}</b><br />
+        <!-- {/if} -->
+        <!-- {if $order.coupons} -->
+        {$lang.coupon_amount}：<b class="price">-{$order.coupon_amount_format}</b><br />
+        {$lang.order_item_amount_net}：<b class="price">{$order.item_amount_format}</b><br />
+        <!-- {/if} -->
+        {$lang.order_order_amount}：<b class="price">{$order.order_amount_format}</b>
+        <!-- {if $order.wallet_paid_amount > 0} -->
+        <br />{$lang.order_wallet_deduct}：<b class="price">-{$order.wallet_paid_format}</b>
+        <!-- {/if} -->
+        <!-- {if $order.status eq 'pending' && $order.payable_amount > 0} -->
+        <br />{$lang.order_amount_waiting}：<b class="price">{$order.payable_amount_format}</b>
+        <!-- {/if} -->
+        <!-- {/if} -->
+       </div>
+      </div>
+      <!-- {/if} -->
+     </div>
+    </div>
+   </div>
+  </div>
+  {include file="inc/common_footer.tpl"}
+ </div>
+ {include file="inc/code_footer.tpl"}
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+</body>
+
+</html>

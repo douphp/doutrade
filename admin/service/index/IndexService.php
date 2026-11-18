@@ -1,0 +1,532 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Admin\Service\Index;
+
+use Dou\Admin\Service\Authorization\AdminGate;
+use Dou\Admin\Service\Cache\CacheClearService;
+use Dou\Admin\Service\Manager\ManagerService;
+use Dou\Core\Facade\DB;
+use Dou\Core\Foundation\Configuration\Config;
+use Dou\Core\Service\Admin\AdminLogAction;
+use Dou\Core\Service\BaseService;
+use Dou\Core\Service\Snapshot\SnapshotRepository;
+use Dou\Core\Support\Arr;
+use Dou\Core\Support\FileHelper;
+use Dou\Core\Web\Http\Client;
+use Dou\Core\Web\Http\CloudApi;
+use Dou\Core\Web\I18n\JsLangExporter;
+use Dou\Core\Web\Manifest\ManifestCacheGeneration;
+use Dou\Core\Web\Routing\JsRouteExporter;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 后台控制台首页数据（IndexController）。
+ */
+class IndexService extends BaseService
+{
+    /** @var CacheClearService */
+    private $cacheClear;
+
+    /**
+     * @param CacheClearService $cacheClear
+     */
+    public function __construct(CacheClearService $cacheClear)
+    {
+        $this->cacheClear = $cacheClear;
+    }
+
+    /**
+     * @return void
+     */
+    public function clearAllCache()
+    {
+        ManifestCacheGeneration::bump();
+        $this->cacheClear->clearCache(STORAGE_PATH . 'cache/template');
+        JsRouteExporter::clearCachedManifests();
+        JsLangExporter::clearCachedLangScripts();
+    }
+
+    /**
+     * 站点网址未写入 config 时，用当前 ROOT_URL 更新 domain
+     *
+     * @return void
+     */
+    public function syncEmptyConfigDomainToRootUrl()
+    {
+        if (empty(Config::get('site.domain', ''))) {
+            DB::table('config')->where('name', 'domain')->update(array('value' => ROOT_URL));
+        }
+    }
+
+    /**
+     * 配置的站点网址与当前访问 ROOT_URL 不一致时提示设置
+     *
+     * @return bool
+     */
+    public function shouldCueSetDomainFromConfig()
+    {
+        return !empty(Config::get('site.domain', '')) && rtrim((string) Config::get('site.domain', ''), '/') !== rtrim(ROOT_URL, '/');
+    }
+
+    /**
+     * 后台首页系统信息
+     *
+     * @return array
+     */
+    public function buildSysInfo()
+    {
+        $yes = lang('yes', 'Yes');
+        $no = lang('no', 'No');
+
+        $warning = array();
+        if (FileHelper::permission(ROOT_PATH . 'install') != 'no_exist') {
+            $warning[] = lang('warning_install_exists');
+        }
+        if (FileHelper::permission(ROOT_PATH . 'upgrade') != 'no_exist') {
+            $warning[] = lang('warning_upgrade_exists');
+        }
+        // 还原流程（含模块失败自动回滚）中断时，站点会停留在维护模式：横幅提示并给出恢复入口
+        try {
+            if (class_exists('Dou\\Admin\\Service\\Backup\\MaintenanceModeService')
+                && (new \Dou\Admin\Service\Backup\MaintenanceModeService(ROOT_PATH))->isActive()) {
+                $warning[] = lang('warning_restore_maintenance');
+            }
+        } catch (\Exception $e) {
+            // 状态探测失败不影响首页渲染
+        } catch (\Throwable $e) {
+            // PHP 7+ 的 \Error 同样忽略
+        }
+        // 兜底清理后台目录改名引导脚本残留（正常流程执行后自删，此处只兜底未跟随跳转的情况）
+        foreach ((array) glob(STORAGE_PATH . 'cache/tmp/admin_dir_relocate_*.php') as $relocateScript) {
+            if (is_file($relocateScript)) {
+                @unlink($relocateScript);
+            }
+        }
+
+        $check_dirs = array(
+            STORAGE_PATH . 'cache/template',
+            STORAGE_PATH,
+            ROOT_PATH . 'images',
+        );
+        foreach ($check_dirs as $dir) {
+            if (!is_dir($dir)) {
+                $warning[] = $dir . ' not found';
+            } elseif (!is_writable($dir)) {
+                $warning[] = $dir . ' not writable';
+            }
+        }
+
+        $cloud_status = $this->checkCloudConnectStatus();
+        if ($cloud_status === 'fail') {
+            $warning[] = lang('cloud_connect_warning');
+        }
+        $warning = array_values(array_filter($warning));
+
+        $build_date = '';
+        if (!empty(Config::get('site.build_date', 0))) {
+            $build_date = date('Y-m-d', (int) Config::get('site.build_date', 0));
+        } else {
+            // 安装锁三级回退（新→旧），取优先存在者的修改时间
+            foreach (array(STORAGE_PATH . 'state/install.lock', STORAGE_PATH . 'install.lock', ROOT_PATH . 'data/install.lock') as $install_lock) {
+                if (file_exists($install_lock)) {
+                    $build_date = date('Y-m-d', filemtime($install_lock));
+                    break;
+                }
+            }
+        }
+
+        $update = '';
+        $patch = '';
+        if (!empty(Config::get('site.update_date', ''))) {
+            $update_date = @unserialize(Config::get('site.update_date', ''));
+            if (is_array($update_date) && isset($update_date['system']) && is_array($update_date['system'])) {
+                $update = isset($update_date['system']['update']) ? $update_date['system']['update'] : '';
+                $patch = isset($update_date['system']['patch']) ? $update_date['system']['patch'] : '';
+            }
+        }
+
+        $logo = '';
+        if (!empty(Config::get('site.site_theme', '')) && Config::get('site.site_logo', '') !== '') {
+            $logo = ROOT_URL . 'theme/' . Config::get('site.site_theme', '') . '/images/' . Config::get('site.site_logo', '');
+        }
+
+        $timezone = function_exists('date_default_timezone_get')
+            ? date_default_timezone_get()
+            : (lang('no_timezone'));
+
+        $safe_mode = @ini_get('safe_mode');
+        $safe_mode_gid = @ini_get('safe_mode_gid');
+
+        return array(
+            'folder_exists' => $warning,
+            'count_module' => $this->buildModuleCounts(),
+            'charset' => strtoupper(DOU_CHARSET),
+            'build_date' => $build_date,
+            'update' => $update,
+            'patch' => $patch,
+            'logo' => $logo,
+            'php_ver' => PHP_VERSION,
+            'max_filesize' => ini_get('upload_max_filesize'),
+            'gd' => extension_loaded('gd') ? $yes : $no,
+            'zlib' => function_exists('gzclose') ? $yes : $no,
+            'timezone' => $timezone,
+            'socket' => function_exists('fsockopen') ? $yes : $no,
+            'cloud_connect' => $cloud_status === 'ok'
+                ? lang('cloud_connect_ok')
+                : ($cloud_status === 'unset' ? lang('cloud_connect_unconfigured') : lang('cloud_connect_fail')),
+            'mysql_ver' => DB::version(),
+            'os' => PHP_OS,
+            'ip' => Arr::get($_SERVER, 'SERVER_ADDR', ''),
+            'web_server' => Arr::get($_SERVER, 'SERVER_SOFTWARE', ''),
+            'safe_mode' => $safe_mode ? $yes : $no,
+            'safe_mode_gid' => $safe_mode_gid ? $yes : $no,
+        );
+    }
+
+    /**
+     * 云服务连通性检测（复用 Client 的 HTTPS 通道验证 SSL 校验链路）
+     *
+     * 结果缓存 10 分钟，避免云服务故障时拖慢首页加载。
+     *
+     * @return string ok|fail|unset
+     */
+    private function checkCloudConnectStatus()
+    {
+        $cacheFile = STORAGE_PATH . 'cache/cloud/connect_check.json';
+        if (is_file($cacheFile) && (time() - (int) filemtime($cacheFile)) < 600) {
+            $cached = @file_get_contents($cacheFile);
+            if (in_array($cached, array('ok', 'fail', 'unset'), true)) {
+                return $cached;
+            }
+        }
+
+        $url = CloudApi::url('/health');
+        if ($url === '') {
+            $status = 'unset';
+        } else {
+            $meta = Client::request('GET', $url, array(), array(), array(
+                'connect_timeout' => 3,
+                'timeout' => 5,
+                'return_meta' => true,
+            ));
+            $status = (is_array($meta) && (int) $meta['errno'] === 0 && (int) $meta['http_code'] === 200) ? 'ok' : 'fail';
+        }
+
+        if (!is_dir(dirname($cacheFile))) {
+            @mkdir(dirname($cacheFile), 0777, true);
+        }
+        @file_put_contents($cacheFile, $status);
+        return $status;
+    }
+
+    /**
+     * 最近管理员日志：非超级管理员仅看本人；固定取 4 条
+     *
+     * @return array
+     */
+    public function getRecentAdminLogs()
+    {
+        $admin = auth('admin')->user();
+        $filter_admin_id = '';
+        if (is_array($admin) && isset($admin['action_list']) && $admin['action_list'] !== 'ALL') {
+            if (isset($admin['admin_id'])) {
+                $filter_admin_id = (int) $admin['admin_id'];
+            } elseif (isset($admin['user_id'])) {
+                $filter_admin_id = (int) $admin['user_id'];
+            }
+        }
+
+        $logs = $this->getAdminLog($filter_admin_id, 4);
+        return is_array($logs) ? $logs : array();
+    }
+
+    /**
+     * 获取管理员操作日志列表
+     *
+     * @param string $admin_id
+     * @param string $num
+     * @return array
+     */
+    private function getAdminLog($admin_id = '', $num = '')
+    {
+        $log_list = array();
+        $query = \Dou\Admin\Model\Manager\ManagerAdminLog::query();
+        if ($admin_id) {
+            $query->where('admin_id', $admin_id);
+        }
+        $query->order('id DESC');
+        if ($num) {
+            $query->limit($num);
+        }
+
+        $rows = $query->get();
+        foreach ($rows as $model) {
+            $log_list[] = ManagerService::renderAdminLogRow($model->toArray());
+        }
+
+        return $log_list;
+    }
+
+    /**
+     * 首页备份区块：数据库备份 + 最近还原点合并为统一行列表。
+     *
+     * 还原点与用户主动执行的数据库备份定位不同（前者是升级应急回退），
+     * 但同属「可恢复的数据」在首页合并展示；完整还原点列表在还原点页。
+     *
+     * @return array Smarty assign 用 backup 结构（rows / msg / light / back_url / show_snapshots）
+     */
+    public function buildBackupAssign()
+    {
+        $backup_files = array_merge(
+            (array) glob(STORAGE_PATH . 'backup/*.sql'),
+            (array) glob(STORAGE_PATH . 'backup/*.zip')
+        );
+
+        $backup = array(
+            'msg' => lang('backup_action_cue_never'),
+            'light' => true,
+            'back_url' => route('admin.index'),
+        );
+        $rows = array();
+
+        if ($backup_files && count($backup_files) > 0) {
+            $backup = $this->buildBackupSummary($backup_files);
+            if (!empty($backup['new'])) {
+                $new = $backup['new'];
+                $rows[] = array(
+                    'label' => lang('backup_new'),
+                    'title' => $new['filename'],
+                    'maketime' => $new['maketime'],
+                    'filesize' => $new['filesize'],
+                    'timestamp' => (int) strtotime($new['maketime']),
+                    'url' => '',
+                );
+            }
+            // 只有一个备份时 new 与 old 相同，不重复展示
+            if (!empty($backup['old']) && $backup['old']['filename'] !== $backup['new']['filename']) {
+                $old = $backup['old'];
+                $rows[] = array(
+                    'label' => lang('backup_old'),
+                    'title' => $old['filename'],
+                    'maketime' => $old['maketime'],
+                    'filesize' => $old['filesize'],
+                    'timestamp' => (int) strtotime($old['maketime']),
+                    'url' => '',
+                );
+            }
+        }
+
+        $showSnapshots = !Config::get('site.close_update', false)
+            && app(AdminGate::class)->canAccess((array) auth('admin')->user(), 'cloud', 'snapshot');
+        if ($showSnapshots) {
+            // 还原点：最近 3 个（跨 scope），用 manifest 估算大小，不递归扫描目录
+            $snapshotUrl = route('admin.cloud.snapshot');
+            $repository = new SnapshotRepository(ROOT_PATH);
+            foreach (array_slice($repository->all(false), 0, 3) as $row) {
+                $manifest = $row['manifest'];
+                $scope = isset($manifest['scope']) ? (string) $manifest['scope'] : '';
+                if ($scope === 'system') {
+                    $label = lang('snapshot_group_system');
+                } elseif ($scope === 'module') {
+                    $label = lang('snapshot_group_module');
+                } else {
+                    $label = lang('snapshot_group_extend');
+                }
+                $rows[] = array(
+                    'label' => $label,
+                    'title' => !empty($manifest['title']) ? (string) $manifest['title'] : $row['name'],
+                    'maketime' => date('Y-m-d H:i:s', (int) $row['created_at']),
+                    'filesize' => $this->formatBytes($row['total_size']),
+                    'timestamp' => (int) $row['created_at'],
+                    'url' => $snapshotUrl,
+                );
+            }
+        }
+
+        usort($rows, function ($a, $b) {
+            if ($a['timestamp'] === $b['timestamp']) {
+                return 0;
+            }
+
+            return $b['timestamp'] - $a['timestamp'];
+        });
+        $backup['rows'] = $rows;
+        $backup['show_snapshots'] = $showSnapshots;
+
+        return $backup;
+    }
+
+    /**
+     * 字节数格式化（展示用）。
+     *
+     * @param int $bytes
+     * @return string
+     */
+    private function formatBytes($bytes)
+    {
+        $bytes = (int) $bytes;
+        if ($bytes >= 1073741824) {
+            return round($bytes / 1073741824, 2) . ' GB';
+        }
+        if ($bytes >= 1048576) {
+            return round($bytes / 1048576, 2) . ' MB';
+        }
+        if ($bytes >= 1024) {
+            return round($bytes / 1024, 1) . ' KB';
+        }
+
+        return $bytes . ' B';
+    }
+
+    /**
+     * @return void
+     */
+    public function deleteInstallDirectory()
+    {
+        $install_path = ROOT_PATH . 'install';
+        if (!is_dir($install_path)) {
+            return;
+        }
+        FileHelper::delDir($install_path);
+        audit()->writeAdminLog((int) auth('admin')->id(), AdminLogAction::DELETE, 1, 'install_dir');
+    }
+
+    /**
+     * 关闭控制台「快速开始」标记文件
+     *
+     * @return void
+     */
+    public function clearQuickStartFlag()
+    {
+        // 新旧两处候选全部清理
+        foreach (array(STORAGE_PATH . 'state/quick.start.dou', STORAGE_PATH . 'quick.start.dou') as $path) {
+            if (file_exists($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    /**
+     * 读取后台首页快捷入口 storage/state/quick.start.dou（兼容旧位 storage/quick.start.dou）。
+     *
+     * @return array
+     */
+    public function buildQuickStartItems()
+    {
+        $quick_start = array();
+        $file = '';
+        foreach (array(STORAGE_PATH . 'state/quick.start.dou', STORAGE_PATH . 'quick.start.dou') as $candidate) {
+            if (file_exists($candidate)) {
+                $file = $candidate;
+                break;
+            }
+        }
+        if ($file !== '') {
+            $content = file($file);
+            foreach ((array) $content as $line) {
+                $line = trim($line);
+                if (strpos($line, '|') !== false) {
+                    $arr = explode('|', $line);
+                    $quick_start[] = array(
+                        'text' => isset($arr[0]) ? $arr[0] : '',
+                        'link' => isset($arr[1]) ? $arr[1] : '',
+                        'target' => isset($arr[2]) ? $arr[2] : '',
+                    );
+                }
+            }
+
+            return $quick_start;
+        }
+
+        return $quick_start;
+    }
+
+    /**
+     * 控制台系统信息区：各业务表条目数摘要。
+     *
+     * @return array
+     */
+    private function buildModuleCounts()
+    {
+        $rows = array();
+
+        if (DB::tableExist('page')) {
+            $rows[] = array(
+                'name' => str_replace('列表', '', lang('page_list')) . lang('number'),
+                'number' => DB::table('page')->count(),
+            );
+        }
+
+        foreach ((array) Config::get('module.column_module') as $value) {
+            if (!in_array($value, (array) Config::get('module.no_show_menu')) && DB::tableExist($value)) {
+                $rows[] = array(
+                    'name' => str_replace('列表', '', (lang($value) ? lang($value) : lang($value . '_category'))) . lang('number'),
+                    'number' => DB::table($value)->count(),
+                );
+            }
+        }
+
+        foreach ((array) Config::get('module.single_module') as $value) {
+            if (!in_array($value, (array) Config::get('module.no_show_menu')) && !in_array($value, (array) Config::get('system.admin_hidden_single', array()), true) && DB::tableExist($value)) {
+                $rows[] = array(
+                    'name' => lang($value) . lang('number'),
+                    'number' => DB::table($value)->count(),
+                );
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * 根据备份目录文件列表生成最新/最旧项与提示文案（供首页备份区块）。
+     *
+     * @param array $files glob 得到的完整路径列表
+     * @return array
+     */
+    private function buildBackupSummary($files)
+    {
+        $infos = FileHelper::buildFileListByTime($files);
+
+        if (is_array($infos)) {
+            $backup['new'] = current($infos);
+            $backup['old'] = end($infos);
+            $over_day = floor((time() - strtotime($backup['new']['maketime'])) / (3600 * 24));
+        }
+
+        if (!isset($over_day)) {
+            $backup['msg'] = lang('backup_action_cue_never');
+            $backup['light'] = true;
+        } elseif ($over_day == 0) {
+            $backup['msg'] = lang('backup_action_cue_today');
+        } elseif ($over_day > 30) {
+            $backup['msg'] = lang('backup_action_cue_overday_a') . $over_day . lang('backup_action_cue_overday_b');
+            $backup['light'] = true;
+        } else {
+            $backup['msg'] = $over_day . lang('backup_action_cue_day');
+        }
+
+        if (!isset($backup['light'])) {
+            $backup['light'] = false;
+        }
+
+        $backup['back_url'] = route('admin.index');
+
+        return $backup;
+    }
+}

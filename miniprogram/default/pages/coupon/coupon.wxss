@@ -1,0 +1,24 @@
+/* pages/coupon/coupon.wxss */
+@import "./user.wxss";
+
+.coupon-list .item .coupon-image {
+ width: 100%;
+ height: 140rpx;
+ margin-bottom: 20rpx;
+}
+.coupon-list .item .foot {
+ border-top: 1rpx dashed #EEE;
+ padding-top: 20rpx;
+ text-align: center;
+}
+.coupon-list .item .foot .get-coupon {
+ display: inline-block;
+ padding: 8rpx 40rpx;
+ background-color: #df3033;
+ color: #FFF;
+ border-radius: 4rpx;
+}
+.coupon-list .item .foot .sold-out,
+.coupon-list .item .foot .got {
+ color: #999;
+}

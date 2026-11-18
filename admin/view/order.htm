@@ -1,0 +1,349 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/order.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div id="order" class="dou-page">
+   <!-- {if $rec eq 'default'} 订单列表 -->
+   {include file="inc/page_header.tpl"}
+   <div class="filter">
+    <form action="{url link='admin.order'}" method="get" onsubmit="return hideEmpty(this)">
+     <select class="select" name="status">
+      <option value="">{$lang.order_status_all}</option>
+      <!-- {foreach from=$status_options item=opt} -->
+      <option value="{$opt.value}"{if $status_filter eq $opt.value} selected="selected"{/if}>{$opt.format}</option>
+      <!-- {/foreach} -->
+     </select>
+     <input name="username" type="text" class="input" value="{$req.username}" size="25" placeholder="{$lang.user_search_placeholder}" />
+     <input name="order_sn" type="text" class="input" value="{$req.order_sn}" placeholder="{$lang.order_order_sn}" size="20" />
+     <input name="order_consignee" type="text" class="input" value="{$req.order_consignee}" placeholder="{$lang.order_consignee}" size="20" />
+     <script type="text/javascript" src="js/laydate/laydate.js"></script>
+     <input type="text" id="time_start" name="time_start" value="{$req.time_start}" class="input" placeholder="{$lang.time_start}" autocomplete="off" />
+     <input type="text" id="time_end" name="time_end" value="{$req.time_end}" class="input" placeholder="{$lang.time_end}" autocomplete="off" />
+     <script>
+     {literal}
+     laydate.render({
+       elem: '#time_start',
+       type: 'datetime'
+     });
+     laydate.render({
+       elem: '#time_end',
+       type: 'datetime'
+     });
+     {/literal}
+     </script>
+     <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+     <a class="btn-secondary" href="{url link='admin.order'}">{$lang.btn_reset}</a>
+    </form>
+   </div>
+   <div id="list">
+    <form name="action" method="post" action="{url link='admin.order.action'}">
+     <input type="hidden" name="token" value="{$token}" />
+     <!-- 导出全部时按当前筛选条件导出，与列表页保持一致 -->
+     <input type="hidden" name="status" value="{$req.status}" />
+     <input type="hidden" name="username" value="{$req.username}" />
+     <input type="hidden" name="order_sn" value="{$req.order_sn}" />
+     <input type="hidden" name="order_consignee" value="{$req.order_consignee}" />
+     <input type="hidden" name="time_start" value="{$req.time_start}" />
+     <input type="hidden" name="time_end" value="{$req.time_end}" />
+     <table class="table">
+      <tr>
+       <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+       <th class="m-none text-center" width="40">{$lang.record_id}</th>
+       <th class="text-left">{$lang.order_order_sn}</th>
+       <th class="m-none text-center">{$lang.order_email}</th>
+       <th class="m-none text-center">{$lang.order_phone}</th>
+       <th class="m-none text-center">{$lang.order_contact}</th>
+       <th class="m-none text-center">{$lang.order_order_amount}</th>
+       <th class="text-center">{$lang.order_status}</th>
+       <th class="m-none text-center">{$lang.order_created_at}</th>
+       <th width="80" class="text-center">{$lang.handler}</th>
+      </tr>
+      <!-- {foreach from=$order_list item=order} -->
+      <tr>
+       <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$order.order_id}" /></td>
+       <td class="m-none text-center">{$order.order_id}</td>
+       <td><a href="{url link='admin.order.show' order_id=$order.order_id}">{$order.order_sn}</a></td>
+       <td class="m-none text-center">{$order.email}</td>
+       <td class="m-none text-center">{$order.phone}</td>
+       <td class="m-none text-center">{$order.contact}</td>
+       <td class="m-none text-center"><!-- {if $order.mode eq 'point'} -->{$order.order_point}<!-- {else} -->{$order.order_amount}<!-- {/if} --></td>
+       <td class="text-center">{$order.status_format}</td>
+       <td class="m-none text-center">{$order.created_at}</td>
+       <td class="text-center"><a href="{url link='admin.order.show' order_id=$order.order_id}">{$lang.view}</a></td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+     <div class="action">
+      <select class="select" name="action">
+       <option value="0">{$lang.select}</option>
+       <option value="del_all">{$lang.del}</option>
+       <option value="cancel_all">{$lang.order_cancel}</option>
+       <!-- {if $excel} -->
+       <option value="excel">{$lang.excel_export}</option>
+       <option value="excel_all">{$lang.excel_export_all}</option>
+       <!-- {/if} -->
+      </select>
+      <input class="btn" type="submit" value="{$lang.btn_execute}" />
+     </div>
+    </form>
+   </div>
+   {include file="inc/pager.tpl"}
+   <!-- {/if} -->
+   <!-- {if $rec eq 'show'} 订单详情 -->
+   <div class="view">
+    {include file="inc/page_header.tpl"}
+    <table class="table">
+     <tr>
+      <th colspan="4" class="text-left">{$lang.order_order_sn}：{$order.order_sn}</th>
+      <th colspan="4" class="text-right">{$lang.order_status}：{$order.status_format}</th>
+     </tr>
+     <tr>
+      <td width="60">{$lang.order_contact}：</td>
+      <td>{$order.contact}</td>
+      <td width="60">{$lang.order_phone}：</td>
+      <td>{$order.phone}</td>
+      <td width="60">{$lang.user_username}：</td>
+      <td>{$order.user.username}</td>
+      <td width="60" class="text-right">{$lang.order_postcode}：</td>
+      <td>{$order.postcode}</td>
+     </tr>
+     <tr>
+      <td>{$lang.order_address}：</td>
+      <td colspan="7">{$order.address}</td>
+     </tr>
+     <tr>
+      <td>{$lang.order_payment}：</td>
+      <td>
+       {$order.pay_name}
+       <!-- {if $order.pay_evidence} -->
+       <a href="{$order.pay_evidence}" target="_blank">查看付款截图</a>
+       <!-- {/if} -->
+      </td>
+      <td>{$lang.order_shipping}：</td>
+      <td colspan="3">{$order.shipping_name}</td>
+      <td class="text-right">{$lang.order_created_at}：</td>
+      <td>{$order.created_at}</td>
+     </tr>
+    </table>
+    <table class="table" style="margin:30px 0;">
+     <tr>
+      <td class="text-left"><strong>{$lang.order_name}</strong></td>
+      <td width="300" class="text-center"><strong><!-- {if $order.mode eq 'point'} -->{$lang.order_point}<!-- {else} -->{$lang.order_price}<!-- {/if} --></strong></td>
+      <td width="150" class="text-center"><strong>{$lang.number}</strong></td>
+     </tr>
+     <!-- {foreach from=$order.item_list item=item} -->
+     <tr>
+      <td><a href="{$item.url}" target="_blank">{$item.name}</a></td>
+      <td class="text-center">
+       <!-- {if $order.mode eq 'point'} -->
+       {$item.point}
+       <!-- {else} -->
+       {$item.sale_price}<!-- {if $item.sale_price_type neq 'original'} --><i class="price-cue">{$item.sale_price_name}</i><em class="price-gray">{$item.price}</em><!-- {/if} -->
+       <!-- {/if} -->
+      </td>
+      <td class="text-center">x {$item.item_number}</td>
+     </tr>
+     <!-- {/foreach} -->
+     <tr>
+      <td colspan="3" style="line-height:180%" class="text-right">
+       <!-- {if $order.mode eq 'point'} -->
+       {$lang.order_point}：{$order.order_point}
+       <!-- {else} -->
+       <!-- {if $order.coupons} -->
+       {$lang.order_item_amount_gross}：{$order.item_amount_gross_format}<br />
+       <!-- {else} -->
+       {$lang.order_item_amount}：{$order.item_amount_format}<br />
+       <!-- {/if} -->
+       <!-- {if $order.shipping_id} -->
+       {$lang.order_shipping_fee}：{$order.shipping_fee_format}<br />
+       <!-- {/if} -->
+       <!-- {if $order.coupons} -->
+       {$lang.coupon_amount}：<b class="price">-{$order.coupon_amount_format}</b><br />
+       <!-- {foreach from=$order.coupons item=coupon} -->
+       {$lang.coupon}：{$coupon.name} <b class="price">{$coupon.amount_format}</b> <em> ({$coupon.condition_text}, {$coupon.brief})</em><br />
+       <!-- {/foreach} -->
+       {$lang.order_item_amount_net}：{$order.item_amount_format}<br />
+       <!-- {/if} -->
+       {$lang.order_order_amount}：{$order.order_amount_format}
+       <!-- {if $order.currency_code neq $site.currency_base_code} -->
+       <br />{$lang.order_customer_pay}（{$order.currency_code}）：<b class="price">{$order.currency_order_amount_format}</b> <em class="text">（1 {$site.currency_base_code} = {$order.currency_rate_format} {$order.currency_code}）</em>
+       <!-- {/if} -->
+       <!-- {/if} -->
+      </td>
+     </tr>
+    </table>
+    <!-- {if $order.need_pay_check} -->
+    <table class="table" style="margin:30px 0;">
+     <tr>
+      <td colspan="2" class="text-left"><strong>离线付款确认</strong></td>
+     </tr>
+     <tr>
+      <td width="320">
+       <!-- {if $order.pending_payment.pay_evidence} -->
+       <a href="{$order.pay_evidence}" target="_blank"><img src="{$order.pay_evidence}" width="300" /></a>
+       <!-- {else} -->
+       <em class="text">用户尚未上传付款凭证</em>
+       <!-- {/if} -->
+      </td>
+      <td class="text-center v-top">
+       <form action="{url link='admin.order.pay_reject'}" method="post" style="display:inline-block; margin-right:12px;" onsubmit="return confirm('确定驳回该笔付款？驳回后订单回到待付款状态，用户可重新上传凭证。');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="order_id" value="{$order.order_id}" />
+        <input type="text" name="reason" placeholder="驳回原因（选填）" class="input" size="22" />
+        <input type="submit" class="btn" value="驳回" />
+       </form>
+       <a href="{url link='admin.order.pay_check' order_id=$order.order_id}" class="btn js-post" style="color: #FFF;">{$lang.order_pay_check}</a>
+      </td>
+     </tr>
+    </table>
+    <!-- {/if} -->
+    <!-- {if $order.payment_list} -->
+    <table class="table" style="margin:30px 0;">
+     <tr>
+      <td colspan="6" class="text-left"><strong>支付记录</strong></td>
+     </tr>
+     <tr style="background:#f5f5f5;">
+      <td class="text-center"><strong>支付流水号</strong></td>
+      <td class="text-center"><strong>支付方式</strong></td>
+      <td class="text-center"><strong>金额</strong></td>
+      <td class="text-center"><strong>状态</strong></td>
+      <td class="text-center"><strong>第三方流水号</strong></td>
+      <td class="text-center"><strong>支付时间</strong></td>
+     </tr>
+     <!-- {foreach from=$order.payment_list item=payment} -->
+     <tr>
+      <td class="text-center">{$payment.payment_sn}</td>
+      <td class="text-center">{$payment.gateway_name|default:$payment.gateway}</td>
+      <td class="text-center">{$payment.amount}</td>
+      <td class="text-center">{$payment.status_format}</td>
+      <td class="text-center">
+       <!-- {if $payment.transaction_id} -->
+       {$payment.transaction_id}
+       <!-- {else} -->
+       -
+       <!-- {/if} -->
+      </td>
+      <td class="text-center">
+       <!-- {if $payment.paid_at_format} -->
+       {$payment.paid_at_format}
+       <!-- {else} -->
+       {$payment.add_time_format}
+       <!-- {/if} -->
+      </td>
+     </tr>
+     <!-- {/foreach} -->
+    </table>
+    <!-- {/if} -->
+    <!-- {if $order.pending_refunds} -->
+    <table class="table" style="margin:30px 0;">
+     <tr>
+      <td colspan="5" class="text-left"><strong>待确认退款</strong></td>
+     </tr>
+     <tr style="background:#f5f5f5;">
+      <td class="text-center"><strong>退款单号</strong></td>
+      <td class="text-center"><strong>渠道</strong></td>
+      <td class="text-center"><strong>金额</strong></td>
+      <td class="text-center"><strong>申请时间</strong></td>
+      <td class="text-center"><strong>操作</strong></td>
+     </tr>
+     <!-- {foreach from=$order.pending_refunds item=refund} -->
+     <tr>
+      <td class="text-center">{$refund.refund_sn}</td>
+      <td class="text-center">{$refund.channel}</td>
+      <td class="text-center">{$refund.amount_format}</td>
+      <td class="text-center">{$refund.created_at_format}</td>
+      <td class="text-center">
+       <form action="{url link='admin.aftersale.confirm_gateway_refund'}" method="post" style="margin:0;">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="refund_sn" value="{$refund.refund_sn}" />
+        <input type="submit" class="btn" value="确认已退款" style="color:#FFF;" />
+       </form>
+       <!-- {if $refund.aftersale_id == 0} -->
+       <form action="{url link='admin.order.fail_refund'}" method="post" style="margin:6px 0 0;" onsubmit="return confirm('{$lang.aftersale_fail_gateway_confirm}');">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="refund_sn" value="{$refund.refund_sn}" />
+        <input type="submit" class="btn-secondary" value="{$lang.aftersale_fail_gateway_refund}" />
+       </form>
+       <!-- {/if} -->
+      </td>
+     </tr>
+     <!-- {/foreach} -->
+    </table>
+    <!-- {/if} -->
+    <!-- {if $order.allow_retry_paid} -->
+    <div style="margin:30px 0;">
+     <a href="{url link='admin.order.retry_paid' order_id=$order.order_id}" class="btn js-post" style="color:#FFF;" data-confirm="确定补发付款联动（积分/分销/会员升级）？已发放的项目不会重复处理。">{$lang.order_retry_paid}</a>
+    </div>
+    <!-- {/if} -->
+    <!-- {if $shipping_list && $order.can_ship} -->
+    <div class="tracking">
+     <div class="tracking-no"><!-- {if $order.tracking_no} -->{$order.shipping_name}：{$order.tracking_no}
+      <button class="btn-show" type="button" onClick="showHide('actionBox')">{$lang.edit}</button>
+      <!-- {/if} --></div>
+     <div class="tracking-submit">
+      <div id="actionBox"{if $order.tracking_no} class="edit"{/if}>
+       <form action="{url link='admin.order.tracking'}" method="post">
+        <input type="hidden" name="token" value="{$token}" />
+        <select class="select" name="shipping_id" required="required">
+         <option value="">{$lang.order_shipping_select}</option>
+         <!-- {foreach from=$shipping_list item=shipping} -->
+         <!-- {if $shipping.slug eq $order.shipping_id} -->
+         <option value="{$shipping.slug}" selected="selected">{$shipping.name}</option>
+         <!-- {else} -->
+         <option value="{$shipping.slug}">{$shipping.name}</option>
+         <!-- {/if} -->
+         <!-- {/foreach} -->
+        </select>
+        <input name="tracking_no" type="text" class="input" value="{$order.tracking_no}" size="40" required="required" />
+        <input type="hidden" name="order_id" value="{$order.order_id}">
+        <input class="btn" type="submit" value="{$lang.order_tracking_submit}" />
+       </form>
+       <!-- {if $order.tracking_no} -->
+       <button class="btn-hide" type="button">{$lang.cancel}</button>
+       <!-- {/if} -->
+      </div>
+     </div>
+    </div>
+    <!-- {/if} -->
+   </div>
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"} </div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+ {literal}
+ onload = function() {document.forms['action'].reset();}
+ {/literal}
+</script>
+<!-- {/if} -->
+<script type="text/javascript">
+ {literal}
+ $(document).ready(function(){
+   $(".btn-hide").click(function(){
+       $("#actionBox").hide();
+   });
+   $(".btn-show").click(function(){
+       $("#actionBox").show();
+   });
+ });
+ {/literal}
+</script>
+</body>
+</html>

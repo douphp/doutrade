@@ -1,0 +1,112 @@
+<?php
+
+/**
+ * DouPHP
+ * ------------------------------------------------------------------------------------
+ * 版权所有 2013-2026 漳州豆壳网络科技有限公司，并保留所有权利。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * 这不是一个自由软件！您只能在遵守授权协议前提下对程序代码进行修改和使用；
+ * 不允许对程序代码以任何形式任何目的的再发布。
+ * 授权协议：http://www.douphp.com/license.html
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-04
+ */
+
+/**
+ * 安全栈配置（由 Init 早期合并入 Config）
+ *
+ * 由 {@see \Dou\Core\Init\InitTrait::loadSecurityConfig()} 在 instantiateCommonFactories
+ * （构造 AuditService($request->ip()) 之前）灌入 Config，并据此 Request::setTrustedProxies()，
+ * 保证可信代理判定先于任何 ip() 调用生效。
+ *
+ * 配置块：
+ *   trusted_proxies - 可信反向代理名单（精确 IP 或 CIDR）。空 = 不信任任何代理：
+ *                     Request::ip() 仅用 REMOTE_ADDR，X-Forwarded-* 一律忽略。
+ *                     部署在负载均衡 / Nginx 反代后时，把代理出口 IP 配进来才采信转发头。
+ *                     该名单同时决定 bootstrap 的 HTTP / IS_HTTPS：反代终止 TLS 时
+ *                     只有命中名单，X-Forwarded-Proto: https 才会被当作真实协议。
+ *   trusted_hosts   - 可信 Host 白名单（精确域名或 '*.example.com' 子域通配）。空 = 不校验；
+ *                     非空时 Request::host() 对未命中的 Host 回落到名单首项，
+ *                     防止客户端伪造 Host 头污染对外 URL（邮件链接 / 跳转 / 缓存投毒）。
+ *   headers         - 基线安全响应头（无 CSP；由三端 SecurityHeadersMiddleware 下发）：
+ *                     frame_options          - X-Frame-Options（SAMEORIGIN / DENY；空串关闭）
+ *                     content_type_options   - true 时下发 X-Content-Type-Options: nosniff
+ *                     referrer_policy        - Referrer-Policy（空串关闭）
+ *                     permissions_policy     - Permissions-Policy（空串关闭）
+ *                     hsts                   - HTTP 严格传输安全，仅 HTTPS 且 enabled 时下发：
+ *                                                enabled / max_age（秒）/ subdomains（含子域）
+ *   cors            - API 端跨域支持（api 入口经 Dou\Core\Web\Http\Cors 在路由解析前下发）：
+ *                     enabled         - 总开关（默认 false，零行为变化）；true 时按白名单放行
+ *                     allowed_origins - 允许的 Origin 白名单：精确 origin / '*.example.com' 子域 / '*'
+ *                                       （credentials=true 时 '*' 不生效，必须显式列 origin）
+ *                     allowed_methods - 预检回应的 Access-Control-Allow-Methods
+ *                     allowed_headers - 预检允许的请求头（与请求方列表取交集回显）
+ *                     expose_headers  - 客户端可读取的响应头（如 Retry-After）
+ *                     max_age         - 预检结果缓存秒数
+ *                     credentials     - 是否允许携带 Cookie（结算会话等；true 时禁用 '*'）
+ *   throttle        - 定向限流（targeted）：
+ *                     store   - 文件后端目录（ThrottleStore 落 <hash>.json）
+ *                     default - 全局默认限流（null = 默认不限流，仅敏感端点在中间件 throttleFor 配额）
+ *   session         - 会话 Cookie 硬化（由 InitTrait::startSession() 在 session_start() 前应用）：
+ *                     httponly        - 会话 Cookie 禁止 JS 读取（防 XSS 窃取 sid），建议恒 true
+ *                     secure          - 仅 HTTPS 下发；null = 跟随运行时 IS_HTTPS（混合部署推荐）
+ *                     samesite        - SameSite 策略（Lax / Strict / None），跨站 CSRF 防御
+ *                     use_strict_mode - 拒绝未初始化的外部 sid（防会话固定），建议恒 true
+ */
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+return [
+    'security' => [
+        // 默认不信任任何代理（trust-none）。示例：['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+        // CDN / 反代终止 TLS 时（源站只收到 HTTP 80，仅带 X-Forwarded-Proto: https），
+        // 必须把代理出口 IP（或 CIDR）配进来，否则站点地址、强制 HTTPS 跳转、会话 Cookie
+        // Secure 全部按 http 处理。
+        'trusted_proxies' => [],
+
+        // 可信 Host 白名单（精确域名或 '*.example.com' 子域通配）。
+        // 空 = 不校验，Host 原样使用（兼容未配置的既有站点）；
+        // 非空时未命中的 Host 回落到名单首项，杜绝 Host 头注入进对外 URL。
+        // 示例：['www.example.com', 'example.com', '*.example.com']
+        'trusted_hosts' => [],
+
+        'headers' => [
+            'frame_options' => 'SAMEORIGIN',
+            'content_type_options' => true,
+            'referrer_policy' => 'strict-origin-when-cross-origin',
+            'permissions_policy' => 'geolocation=(), microphone=(), camera=()',
+            'hsts' => [
+                'enabled' => false,
+                'max_age' => 31536000,
+                'subdomains' => false,
+            ],
+        ],
+
+        'cors' => [
+            'enabled' => false,
+            // 示例：['https://admin.example.com', 'http://localhost:5173', '*.example.com']
+            'allowed_origins' => [],
+            'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+            'allowed_headers' => ['Content-Type', 'Authorization', 'X-Chat-Visitor', 'X-HTTP-Method-Override', 'X-Requested-With'],
+            'expose_headers' => ['Retry-After'],
+            'max_age' => 86400,
+            'credentials' => false,
+        ],
+
+        'throttle' => [
+            'store' => STORAGE_PATH . 'state/throttle/',
+            'default' => null,
+        ],
+
+        'session' => [
+            'httponly' => true,
+            // null = 跟随运行时 IS_HTTPS；true/false 可强制。
+            'secure' => null,
+            'samesite' => 'Lax',
+            'use_strict_mode' => true,
+        ],
+    ],
+];

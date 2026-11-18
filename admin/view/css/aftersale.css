@@ -1,0 +1,52 @@
+/* 售后服务
+----------------------------------------------- */
+#aftersale .details {
+}
+#aftersale .details .text {
+ color: #999;
+}
+#aftersale .details .td-title {
+ width: 70px;
+}
+#aftersale .table td {
+ padding: 8px 0;
+}
+#aftersale .details .un-lock {
+ float: right;
+}
+/* item-list */
+#aftersale .details .item-list {
+}
+#aftersale .details .item-list dl {
+ zoom:1;
+ overflow:hidden;
+ background-color: #F5F5F5;
+ padding:10px 10px;
+ margin-bottom:3px;
+ line-height: 30px;
+}
+#aftersale .details .item-list dl dt {
+ width:30px;
+ float:left;
+ margin-right:10px;
+ line-height:38px;
+ position: relative;
+ padding-left: 20px;
+}
+#aftersale .details .item-list dl dt input {
+ position: absolute;
+ left: 0;
+ top: 50%;
+ margin-top: -5px;
+}
+#aftersale .details .item-list dl dd {
+ margin-left: 50px;
+}
+#aftersale .details .item-list dl dd p {
+ float:left;
+ width:60%;
+}
+#aftersale .details .item-list dl dd span {
+ float:right;
+ text-align:right;
+}

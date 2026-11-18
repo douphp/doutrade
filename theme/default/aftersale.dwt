@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="{$site.language.tag}">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/user.css" rel="stylesheet" type="text/css" />
+ <link href="css/aftersale.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+</head>
+
+<body>
+ <div id="wrapper">
+  {include file="inc/common_header.tpl"}
+  <div class="container mb">
+   <div id="user">
+    <div class="userLeft"> {include file="inc/user_tree.tpl"} </div>
+    <div class="userIn">
+     <div class="main">
+      <div id="aftersale">
+       <!-- {if $rec eq 'user'} 售后服务.会员中心 -->
+       <h3>{$lang.aftersale_list}</h3>
+       <div class="list">
+        <!-- {foreach from=$aftersale_list item=aftersale} -->
+        <div class="item">
+         <div class="head"><span class="time">{$aftersale.created_at}</span><span class="aftersaleSn">{$lang.aftersale_aftersale_sn}：{$aftersale.aftersale_sn} <em class="text">({$aftersale.status.format})</em> <a href="{$aftersale.detail_url}">{$lang.aftersale_view_detail}</a></span></div>
+         <div class="orderSn">{$lang.order_sn}：<a href="{$aftersale.order.url}" target="_blank">{$aftersale.order.order_sn}</a> <em class="text">({$lang.order_shipped_at}：{$aftersale.order.shipped_at})</em></div>
+         <!-- {if $aftersale.item_list} -->
+         <div class="itemList">
+          <!-- {foreach from=$aftersale.item_list item=item} -->
+          <img title="{$item.name}" src="{$item.thumb}" width="60" height="60" />
+          <!-- {/foreach} -->
+         </div>
+         <!-- {/if} -->
+         <div class="reason">
+          {$lang.aftersale_reason}：
+          <em class="text">{$aftersale.reason}</em>
+          <!-- {foreach from=$aftersale.img_list item=item} -->
+          <a href="{$item.file}" target="_blank"><img src="{$item.file}" height="30" /></a>
+          <!-- {/foreach} -->
+         </div>
+         <!-- {if $aftersale.is_handle} -->
+         <div class="handle">{$lang.aftersale_handle_record}：<b>（{$lang.aftersale_aftersale_money}{$aftersale.aftersale_money}）</b><em class="text">{$aftersale.handle_record}</em></div>
+         <!-- {/if} -->
+        </div>
+        <!-- {/foreach} -->
+        {include file="inc/pager.tpl"}
+       </div>
+       <!-- {/if} -->
+       <!-- {if $rec eq 'apply'} 售后服务.申请 -->
+       <h3>{$lang.aftersale_apply}</h3>
+       <div class="apply">
+        <form id="aftersaleApply" x-data="douForm()" @submit.prevent="submit" action="{url link='aftersale.user.store'}" method="post" enctype="multipart/form-data">
+         <div class="head">{$lang.aftersale_item_list}<em>{$lang.aftersale_item_list_tip}</em></div>
+         <div class="itemList">
+          <!-- {foreach from=$item_list item=item} -->
+          <dl>
+           <dt>
+            <label for="{$item.order_item_id}_label">
+             <input type="checkbox" id="{$item.order_item_id}_label" name="item_list[]" value="{$item.order_item_id}" />
+             <img title="{$item.name}" src="{$item.thumb}" width="60" height="60" />
+            </label>
+           </dt>
+           <dd>
+            <p>{$item.name}</p>
+            <!-- {if $item.attribute_name} --><p class="attribute">{$item.attribute_name}</p><!-- {/if} -->
+            <span>{$item.price}<br>x {$item.item_number}</span>
+           </dd>
+          </dl>
+          <!-- {/foreach} -->
+         </div>
+         <div class="form">
+          <div class="form-item">
+           <div class="form-label">{$lang.aftersale_type}<i>*</i></div>
+           <div class="input-block">
+            <label><input type="radio" name="type" value="refund_only" checked="checked" /> {$lang.aftersale_type_refund_only}</label>
+            &nbsp;&nbsp;
+            <label><input type="radio" name="type" value="refund_with_return" /> {$lang.aftersale_type_refund_with_return}</label>
+            <p class="cue" x-show="hasError('type')" x-text="errorOf('type')"></p>
+           </div>
+          </div>
+          <div class="form-item">
+           <div class="form-label">{$lang.aftersale_reason}<i>*</i></div>
+           <div class="input-block">
+            <textarea name="reason" cols="60" rows="5" class="textarea" placeholder="请填写退换货原因" /></textarea>
+            <p class="cue" x-show="hasError('reason')" x-text="errorOf('reason')"></p>
+           </div>
+          </div>
+          <div class="form-item">
+           <div class="form-label">{$lang.aftersale_image}</div>
+           <div class="input-block">
+            {include file="inc/file_gallery.tpl" module="aftersale" prefix="gallery" item_id="" draft_token=$draft_token list_html=$img_list_html}
+            <p class="cueGray" style="margin-top: 5px">{$lang.aftersale_image_cue}</p>
+           </div>
+          </div>
+          <div class="form-item submit">
+           <div class="input-block">
+            <input type="hidden" name="order_sn" value="{$order.order_sn}" />
+            <input type="hidden" name="draft_token" value="{$draft_token}" />
+            <input type="hidden" name="token" value="{$token}" />
+            <button type="submit" class="btn" :disabled="loading">{$lang.btn_submit}</button>
+            <p class="cue" x-show="message" x-text="message"></p>
+           </div>
+          </div>
+         </div>
+        </form>
+       </div>
+       <!-- {/if} -->
+       <!-- {if $rec eq 'detail'} 售后服务.详情 -->
+       <h3>{$lang.aftersale_detail}</h3>
+       <div class="detail">
+        <div class="item">
+         <div class="head"><span class="aftersaleSn">{$lang.aftersale_aftersale_sn}：{$aftersale.aftersale_sn} <em class="text">（{$aftersale.status.format}）</em></span><span class="time">{$aftersale.created_at}</span></div>
+         <div class="orderSn">{$lang.order_sn}：<a href="{$aftersale.order.url}" target="_blank">{$aftersale.order.order_sn}</a></div>
+         <div class="orderSn">{$lang.aftersale_type}：{$aftersale.type_format}</div>
+         <div class="orderSn">{$lang.aftersale_apply_amount}：{$aftersale.apply_amount_format}　{$lang.aftersale_refunded_amount}：{$aftersale.refunded_amount_format}</div>
+         <!-- {if $aftersale.item_list} -->
+         <div class="itemList">
+          <!-- {foreach from=$aftersale.item_list item=item} -->
+          <img title="{$item.name}" src="{$item.thumb}" width="60" height="60" />
+          <!-- {/foreach} -->
+         </div>
+         <!-- {/if} -->
+         <div class="reason">
+          {$lang.aftersale_reason}：<em class="text">{$aftersale.reason}</em>
+          <!-- {foreach from=$aftersale.img_list item=item} -->
+          <a href="{$item.file}" target="_blank"><img src="{$item.file}" height="30" /></a>
+          <!-- {/foreach} -->
+         </div>
+        </div>
+
+        <!-- {if $aftersale.return_info} -->
+        <div class="returnInfo">
+         <div class="title">{$lang.aftersale_return_info}</div>
+         <p>{$lang.aftersale_return_company}：{$aftersale.return_info.shipping_company}　{$lang.aftersale_return_sn}：{$aftersale.return_info.tracking_no}　{$aftersale.return_info.shipped_at_format}</p>
+        </div>
+        <!-- {/if} -->
+
+        <!-- {if $aftersale.can_return_ship} 填寄回运单 -->
+        <div class="returnShip">
+         <div class="title">{$lang.aftersale_return_ship}</div>
+         <form x-data="douForm()" @submit.prevent="submit" action="{url link='aftersale.user.return_ship'}" method="post">
+          <p><label>{$lang.aftersale_return_company}<i>*</i> <input type="text" name="shipping_company" class="input" /></label></p>
+          <p><label>{$lang.aftersale_return_sn}<i>*</i> <input type="text" name="tracking_no" class="input" /></label></p>
+          <input type="hidden" name="id" value="{$aftersale.id}" />
+          <input type="hidden" name="token" value="{$token}" />
+          <button type="submit" class="btn" :disabled="loading">{$lang.btn_submit}</button>
+          <span class="cue" x-show="message" x-text="message"></span>
+         </form>
+        </div>
+        <!-- {/if} -->
+
+        <!-- {if $aftersale.can_cancel} 买家撤销 -->
+        <div class="cancel">
+         <form x-data="douForm()" @submit.prevent="submit" action="{url link='aftersale.user.cancel'}" method="post">
+          <input type="hidden" name="id" value="{$aftersale.id}" />
+          <input type="hidden" name="token" value="{$token}" />
+          <button type="submit" class="btn btn-secondary" :disabled="loading">{$lang.aftersale_cancel}</button>
+         </form>
+        </div>
+        <!-- {/if} -->
+
+        <!-- {if $aftersale.timeline} 协商时间线 -->
+        <div class="timeline">
+         <div class="title">{$lang.aftersale_timeline}</div>
+         <ul>
+          <!-- {foreach from=$aftersale.timeline item=log} -->
+          <li><span class="time">{$log.created_at}</span> [{$log.operator}] {$log.from} → {$log.to} <em class="text">{$log.note}</em></li>
+          <!-- {/foreach} -->
+         </ul>
+        </div>
+        <!-- {/if} -->
+        <p><a href="{$back_url}">&laquo; {$lang.aftersale_list}</a></p>
+       </div>
+       <!-- {/if} -->
+      </div>
+     </div>
+    </div>
+    <!-- /userIn -->
+   </div>
+  </div>
+  {include file="inc/common_footer.tpl"}
+ </div>
+ {include file="inc/code_footer.tpl"}
+ <script type="text/javascript" src="js/jquery.form.min.js"></script>
+ <script type="text/javascript" src="js/alpine.min.js" defer></script>
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/dou.form.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+ <script type="text/javascript" src="js/file.js"></script>
+</body>
+
+</html>

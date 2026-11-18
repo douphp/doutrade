@@ -1,0 +1,43 @@
+#about {
+ padding: 28px 0;
+ min-height: 400px;
+}
+#about .img-box {
+ display: flex;
+ justify-content: space-between;
+ gap:10px;
+ margin-bottom: 70px;
+}
+#about .img-box i img {
+ width: 100%;
+}
+#about .main {
+ width: 800px;
+ margin: 0 auto;
+}
+#about .main h1 {
+ color: #333333;
+ font-size: 48px;
+}
+#about .main .content {
+ color: #666;
+ line-height: 200%;
+ padding-top: 40px;
+}
+#about .main .content img {
+ max-width: 100%;
+}
+#about .text-box {
+ background-color: #F3F3F3;
+ text-align: center;
+ padding: 50px 150px;
+ margin-top: 20px;
+}
+#about .text-box .head {
+ font-size: 18px;
+ color: #333;
+ margin-bottom: 20px;
+}
+#about .text-box .con {
+ line-height: 200%;
+}

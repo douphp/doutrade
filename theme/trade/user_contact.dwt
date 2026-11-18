@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/user.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+ <script type="text/javascript" src="js/vue.global.js"></script>
+</head>
+
+<body>
+ <div id="wrapper">
+  {include file="inc/common_header.tpl"}
+  <div class="container mb">
+   <div id="user">
+    <div class="userLeft"> {include file="inc/user_tree.tpl"} </div>
+    <div class="userIn">
+     <div class="main">
+      <div class="contact-box">
+       <!-- {if $rec eq 'contact'} 联系人列表 -->
+       <h3><a class="action" href="{url link='user.contact.create'}">{$lang.user_contact_create}</a>{$lang.user_contact}</h3>
+       <div class="list">
+        <!-- {foreach from=$contact_list item=contact} -->
+        <div class="item">
+         <div class="head"><!-- {if !$contact.is_default} --><a class="bi bi-x-lg" href="javascript:;" onclick="return douDelete('{$contact.url_delete}')"></a><!-- {/if} -->{$contact.name} {$contact.mobile} <!-- {if $contact.is_default} --><i>{$lang.user_contact_is_default}</i><!-- {/if} --></div>
+         <!-- {if $features.book} -->
+         <div class="info"><em>{$lang.user_contact_id_card}：{$contact.id_card}</em></div>
+         <!-- {else} -->
+         <div class="info"><em>{$lang.user_contact_address}：{$contact.address_full}</em></div>
+         <!-- {/if} -->
+         <div class="handle">
+          <!-- {if !$contact.is_default} --><a class="action" href="{$contact.url_default}">{$lang.user_contact_is_default_set}</a><!-- {/if} --><a class="action" href="{$contact.url_edit}">{$lang.edit}</a>
+         </div>
+        </div>
+        <!-- {/foreach} -->
+        {include file="inc/pager.tpl"}
+       </div>
+       <!-- {/if} -->
+       <!-- {if $rec eq 'create' || $rec eq 'edit'} 联系人添加编辑 -->
+       <h3><a class="action" href="{url link='user.contact'}">{$lang.user_contact}</a>{$head}</h3>
+       <form id="contactAction" x-data="douForm()" @submit.prevent="submit" action="{$form_action}" method="post" enctype="multipart/form-data"><!-- {if $form_method} --><input type="hidden" name="_method" value="{$form_method}" /><!-- {/if} -->
+        <div class="form">
+         <!-- {if $cur_lang eq 'en_us'} -->
+         <div class="form-item">
+          <div class="form-label">{$lang.user_first_name}<i>*</i></div>
+          <div class="input-block">
+           <input name="first_name" type="text" class="input" value="{$contact.first_name}" size="35" />
+           <p class="cue" x-show="hasError('first_name')" x-text="errorOf('first_name')"></p>
+          </div>
+         </div>
+         <div class="form-item">
+          <div class="form-label">{$lang.user_last_name}<i>*</i></div>
+          <div class="input-block">
+           <input name="last_name" type="text" class="input" value="{$contact.last_name}" size="35" />
+           <p class="cue" x-show="hasError('last_name')" x-text="errorOf('last_name')"></p>
+          </div>
+         </div>
+         <!-- {else} -->
+         <div class="form-item">
+          <div class="form-label">{$lang.user_contact_name}<i>*</i></div>
+          <div class="input-block">
+           <input name="name" type="text" class="input" value="{$contact.name}" size="35" />
+           <p class="cue" x-show="hasError('name')" x-text="errorOf('name')"></p>
+          </div>
+         </div>
+         <!-- {/if} -->
+         <div class="form-item">
+          <div class="form-label">{$lang.user_contact_phone}<i>*</i></div>
+          <div class="input-block">
+           <input name="phone" type="text" class="input" value="{$contact.phone}" size="35" />
+           <p class="cue" x-show="hasError('phone')" x-text="errorOf('phone')"></p>
+          </div>
+         </div>
+         <!-- {if $features.book} -->
+         <div class="form-item">
+          <div class="form-label">{$lang.user_contact_id_card}</div>
+          <div class="input-block">
+           <input name="id_card" type="text" class="input" value="{$contact.id_card}" size="35" />
+           <p class="cue" x-show="hasError('id_card')" x-text="errorOf('id_card')"></p>
+          </div>
+         </div>
+         <!-- {/if} -->
+         <!-- {if $features.area} 判断是否安装地区模块 -->
+         <div class="form-item">
+          <div class="form-label">{$lang.user_contact_area}<i>*</i></div>
+          <div class="input-block" id="area" x-ignore>
+           {literal}
+           <select class="select" v-if="showCountrySelect" v-model="selectedCountry" @change="handleCountryChange">
+            <option :value="null">{/literal}{$lang.select}{literal}</option>
+            <option v-for="country in country_list" :key="country.id" :value="country.name">
+             {{country.name}}
+            </option>
+           </select>
+           <input type="hidden" name="country" :value="selectedCountry" />
+
+           <select class="select" v-if="province_list.length > 0" v-model="selectedProvince" @change="handleProvinceChange">
+            <option :value="null">{/literal}{$lang.select}{literal}</option>
+            <option v-for="province in province_list" :key="province.id" :value="province.name">
+             {{province.name}}
+            </option>
+           </select>
+           <input type="hidden" name="province" :value="selectedProvince" />
+
+           <select class="select" v-if="city_list.length > 0" v-model="selectedCity" @change="handleCityChange">
+            <option :value="null">{/literal}{$lang.select}{literal}</option>
+            <option v-for="city in city_list" :key="city.name" :value="city.name">
+             {{city.name}}
+            </option>
+           </select>
+           <input type="hidden" name="city" :value="selectedCity" />
+
+           <select class="select" v-if="showDistrictSelect" v-model="selectedDistrict">
+            <option :value="null">{/literal}{$lang.select}{literal}</option>
+            <option v-for="district in district_list" :key="district.name" :value="district.name">
+             {{district.name}}
+            </option>
+           </select>
+           <input type="hidden" name="district" :value="selectedDistrict" />
+           {/literal}
+           <p id="area" class="cue"></p>
+          </div>
+         </div>
+         <!-- {/if} /判断是否安装地区模块 -->
+         <div class="form-item">
+          <div class="form-label">{$lang.user_contact_address}<i>*</i></div>
+          <div class="input-block">
+           <input name="address" type="text" class="input" value="{$contact.address}" size="55" />
+           <p class="cue" x-show="hasError('address')" x-text="errorOf('address')"></p>
+          </div>
+         </div>
+         <div class="form-item">
+          <div class="form-label">{$lang.user_contact_tag}</div>
+          <div class="input-block">
+           <input name="tag" type="text" class="input" value="{$contact.tag}" size="15" />
+           <p class="cue" x-show="hasError('tag')" x-text="errorOf('tag')"></p>
+          </div>
+         </div>
+         <!-- {if $rec eq 'create'} -->
+         <div class="form-item">
+          <div class="input-block">
+           <label>
+            <input name="is_default" type="checkbox" align="absMiddle" value="1" {if $contact.is_default eq '1' }checked{/if} /> {$lang.user_contact_is_default_set}
+           </label>
+          </div>
+         </div>
+         <!-- {/if} -->
+         <div class="form-item submit">
+          <div class="input-block">
+           <script>var id = "{$contact.id}";</script>
+           <input type="hidden" name="id" value="{$contact.id}" />
+           <input type="hidden" name="token" value="{$token}" />
+           <button type="submit" class="btn" :disabled="loading">{$lang.btn_submit}</button>
+           <p class="cue" x-show="message" x-text="message"></p>
+          </div>
+         </div>
+        </div>
+       </form>
+       <!-- {/if} -->
+      </div>
+     </div>
+    </div>
+    <!-- /userIn -->
+   </div>
+  </div>
+  {include file="inc/common_footer.tpl"}
+ </div>
+ {include file="inc/code_footer.tpl"}
+ <script type="text/javascript" src="js/alpine.min.js" defer></script>
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/dou.form.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+ <script type="text/javascript" src="js/input.js"></script>
+ <script type="text/javascript" src="js/area.js"></script>
+</body>
+
+</html>

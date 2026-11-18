@@ -1,0 +1,1017 @@
+/*
+Module Name: 订单中心
+Author: DouCo Co.,Ltd.
+Author URI: https://www.douphp.com/
+*/
+/* 订单
+----------------------------------------------- */
+#order {
+ margin-top: 20px;
+}
+#order h3 {
+ font-size: 16px;
+ font-weight: bold;
+ margin: 10px 0;
+ color: #19B4EA;
+}
+#order h3 .timeOut {
+ color: #999;
+}
+#order h3 b {
+ color: red;
+}
+/* -- cartBox -- */
+#order .cartBox {
+ border: 1px solid #E4E4E4;
+}
+#order .cartBox dl {
+ border-bottom: 1px solid #E4E4E4;
+ padding: 8px 0;
+ zoom: 1;
+ overflow: hidden;
+ line-height: 180%;
+ display: flex;
+ justify-content: space-between;
+}
+#order .cartBox dl.head {}
+@media (max-width: 768px) {
+ #order .cartBox dl.head {
+  display: none;
+ }
+}
+#order .cartBox dl.head b {
+ color: #999;
+}
+#order .cartBox dt {
+ width: 40%;
+ padding-left: 10px;
+ box-sizing: border-box;
+}
+#order .cartBox dt a {
+ display: flex;
+}
+#order .cartBox dt a img {
+ margin-right: 8px;
+}
+#order .cartBox dd {
+ width: 15%;
+ text-align: center;
+ white-space: nowrap;
+}
+#order .cartBox dd.last {
+ text-align: right;
+ padding-right: 20px;
+}
+@media (max-width: 992px) {
+ #order .cartBox dt {
+  width: auto;
+  margin-bottom: 10px;
+ }
+ #order .cartBox dd {
+  width: auto;
+  padding: 0 5px;
+ }
+ #order .cartBox dd.subtotal {
+  display: none;
+ }
+ #order .cartBox dd.handler {
+  display: inline-block;
+  width: auto;
+ }
+}
+#order .cartBox dd.name a {
+ color: #0072C6;
+}
+/* -- cart 页面精修（仅购物车页，覆盖共享 cartBox 基础样式） -- */
+#order .cart > h3 {
+ font-size: 20px;
+ font-weight: 600;
+ color: #333;
+ margin: 0 0 18px;
+}
+#order .cart .cartBox {
+ border: 1px solid #eee;
+ overflow: hidden;
+}
+#order .cart .cartBox dl {
+ padding: 16px 0;
+ border-bottom: 1px solid #f0f0f0;
+ align-items: center;
+ line-height: 1.5;
+}
+#order .cart .cartBox dl.head {
+ padding: 12px 0;
+ background: #fafafa;
+ border-bottom: 1px solid #eee;
+}
+#order .cart .cartBox dl.head b {
+ font-size: 13px;
+ font-weight: 600;
+ color: #999;
+}
+#order .cart .cartBox dt {
+ padding-left: 18px;
+}
+#order .cart .cartBox dt a {
+ align-items: center;
+ color: #333;
+}
+#order .cart .cartBox dt a:hover {
+ color: #0072c6;
+}
+#order .cart .cartBox dt a img {
+ width: 56px;
+ height: 56px;
+ object-fit: cover;
+ border: 1px solid #f0f0f0;
+ margin-right: 12px;
+}
+#order .cart .cartBox dt a em {
+ font-size: 14px;
+ line-height: 1.5;
+}
+#order .cart .cartBox dd.last {
+ padding-right: 18px;
+}
+#order .cart .cartBox dd.subtotal {
+ color: #333;
+ font-weight: 600;
+}
+#order .cart .cartBox dd.handler a {
+ color: #999;
+ font-size: 13px;
+ transition: color .15s;
+}
+#order .cart .cartBox dd.handler a:hover {
+ color: #cc0000;
+}
+#order .cart .price-cue {
+ border-radius: 0;
+}
+/* -- 购物车数量加减 -- */
+#order .cartBox .numberBox {
+ display: inline-flex;
+ align-items: stretch;
+ border: 1px solid #e0e0e0;
+ overflow: hidden;
+ background: #fff;
+}
+#order .cartBox .numberBox span {
+ width: 30px;
+ height: 30px;
+ line-height: 28px;
+ text-align: center;
+ font-size: 16px;
+ color: #666;
+ background: #fafafa;
+ cursor: pointer;
+ user-select: none;
+ transition: background-color .15s, color .15s;
+}
+#order .cartBox .numberBox span:hover {
+ background: #f0f0f0;
+ color: #0072c6;
+}
+#order .cartBox .numberBox input {
+ width: 42px;
+ height: 30px;
+ border: 0;
+ border-left: 1px solid #e0e0e0;
+ border-right: 1px solid #e0e0e0;
+ background: #fff;
+ text-align: center;
+ font-size: 14px;
+ color: #333;
+}
+/* -- cart 页脚操作 / 结算条 / 空状态 -- */
+#order .cart .cartAction {
+ padding: 14px 18px;
+}
+#order .cart .cartAction .btn-secondary {
+ float: none;
+ display: inline-block;
+ background: #fff;
+ border: 1px solid #ddd;
+ color: #666;
+ padding: 7px 22px;
+ font-size: 13px;
+ font-weight: normal;
+ transition: border-color .15s, color .15s;
+}
+#order .cart .cartAction .btn-secondary:hover {
+ border-color: #0072c6;
+ color: #0072c6;
+}
+#order .cart .cartBtn {
+ margin-top: 18px;
+ display: flex;
+ align-items: center;
+ justify-content: flex-end;
+ gap: 28px;
+ background: #fafafa;
+ border: 1px solid #eee;
+ padding: 18px 24px;
+}
+#order .cart .cartBtn-info {
+ display: flex;
+ align-items: baseline;
+ gap: 20px;
+}
+#order .cart .cartBtn-count {
+ color: #999;
+ font-size: 14px;
+}
+#order .cart .cartBtn-count b {
+ color: #333;
+ font-weight: 600;
+}
+#order .cart .cartBtn-amount {
+ color: #666;
+ font-size: 14px;
+}
+#order .cart .cartBtn-amount b {
+ color: #cc0000;
+ font-size: 26px;
+ font-weight: 700;
+ line-height: 1;
+}
+#order .cart .cartBtn-checkout {
+ display: inline-flex;
+ align-items: center;
+ gap: 8px;
+ background: #0072c6;
+ color: #fff;
+ font-size: 16px;
+ font-weight: 600;
+ padding: 13px 44px;
+ transition: background-color .15s;
+}
+#order .cart .cartBtn-checkout:hover {
+ background: #007ad5;
+ color: #fff;
+}
+#order .cart .cartBtn-checkout i {
+ font-size: 14px;
+ font-weight: 400;
+}
+@media (max-width: 768px) {
+ #order .cart .cartBtn {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+ }
+ #order .cart .cartBtn-info {
+  justify-content: space-between;
+ }
+ #order .cart .cartBtn-checkout {
+  justify-content: center;
+ }
+}
+#order .cart .cartEmpty {
+ border: 1px dashed #e0e0e0;
+ background: #fafafa;
+ color: #999;
+ font-size: 14px;
+ text-align: center;
+ padding: 60px 20px;
+}
+#order .cart .cartEmpty .bi {
+ display: block;
+ font-size: 40px;
+ color: #ccc;
+ margin-bottom: 14px;
+}
+/* -- checkout -- */
+#order .checkout .checkBox {
+ border: 1px solid #EEE;
+ padding: 15px 25px 40px 25px;
+}
+@media (max-width: 768px) {
+ #order .checkout .checkBox {
+  border: 0;
+  padding: 15px 0;
+ }
+}
+#order .checkout h2 {
+ font-size: 14px;
+ margin-bottom: 15px;
+}
+#order .checkout h2 .more {
+ float: right;
+ font-size: 13px;
+ font-weight: normal;
+ margin-top: 8px;
+}
+#order .checkout .box {
+ border-bottom: 1px solid #E4E4E4;
+ padding-bottom: 15px;
+ margin-bottom: 20px;
+}
+#order .checkout .box .form .form-label,
+#order .contact-box .box .form .form-label {
+ width: 80px;
+ font-size: 12px;
+}
+#order .checkout .box .checkbox {
+ color: #19B4EA;
+ font-size: 13px;
+}
+#order .checkout .address {
+ position: relative;
+}
+#order .checkout .address .title {
+ margin-bottom: 8px;
+}
+#order .checkout .address .title i {
+}
+#order .checkout .address .title .edit {
+ font-size: 12px;
+ display: inline-block;
+ border: 1px solid #CCC;
+ background-color: #F5F5F5;
+ color: #999;
+ padding: 2px 10px;
+ margin-left: 10px;
+ cursor: pointer;
+}
+#order .checkout .address .title .edit:hover {
+ background-color: #FFF;
+}
+#order .checkout .address .item {
+ margin-bottom: 8px;
+}
+#order .checkout .address .item em {
+ color: #999;
+}
+#order .checkout .action {
+ position: absolute;
+ right: 0;
+ top: 10px;
+ text-align: center;
+ font-size: 12px;
+}
+@media(max-width: 992px) {
+ #order .checkout .action {
+  position: absolute;
+  right: 0;
+  top: 0;
+ }
+}
+#order .checkout .action .switch {
+ color: #0072C6;
+ cursor: pointer;
+}
+@media(max-width: 992px) {
+ #order .checkout .action .switch {
+  display: inline-block;
+  border: 1px solid #DDD;
+  background-color: #F5F5F5;
+  padding: 2px 10px;
+  cursor: pointer;
+  margin-right: 10px;
+ }
+}
+#order .checkout .action .add {
+ border: 1px solid #DDD;
+ background-color: #F5F5F5;
+ padding: 4px 10px;
+ margin-top: 5px;
+ cursor: pointer;
+}
+@media(max-width: 992px) {
+ #order .checkout .action .add {
+  display: inline-block;
+  margin-top: 0;
+  padding: 2px 10px;
+ }
+}
+#order .checkout .payment {
+ zoom: 1;
+ overflow: hidden;
+}
+#order .checkout .payment dd {
+ float: left;
+ width: 170px;
+}
+#order .checkout .cartBox {
+ border: 0;
+}
+#order .checkout .shipping dl {
+ zoom: 1;
+ overflow: hidden;
+ padding: 0 0 10px 2px;
+}
+#order .checkout .shipping dt {
+ float: left;
+ width: 120px;
+}
+#order .checkout .shipping dd {
+ float: left;
+ width: 350px;
+}
+#order .checkout .coupon .item {
+ padding: 0 0 10px 2px;
+}
+#order .checkout .coupon .item em {
+ color: #999;
+ margin-left: 10px;
+}
+#order .checkout .cartBox dl {
+ border-bottom: 1px solid #EEE;
+}
+#order .checkout .totalAmount {
+ border-bottom: 1px solid #E4E4E4;
+ margin: 20px 0 20px;
+ padding-bottom: 20px;
+ zoom: 1;
+ overflow: hidden;
+}
+#order .checkout .totalAmount .list {
+ float: right;
+ width: 300px;
+}
+#order .checkout .totalAmount dl {
+ zoom: 1;
+ overflow: hidden;
+ text-align: right;
+ margin-bottom: 10px;
+}
+#order .checkout .totalAmount dt {
+ float: left;
+ width: 150px;
+}
+#order .checkout .totalAmount dd {
+ float: left;
+ width: 150px;
+}
+#order .checkout .totalAmount b {
+ color: red;
+ margin-right: 3px;
+}
+#order .checkout .orderSubmit {
+ text-align: right;
+}
+#order .checkout .orderSubmit .orderAmount {
+ margin-right: 20px;
+ font-size: 15px;
+}
+#order .checkout .orderSubmit .orderAmount b {
+ font-weight: bold;
+ color: red;
+}
+#order .checkout .orderSubmit .submit {
+ background-color: #19B4EA;
+ color: #FFFFFF;
+ padding: 10px 40px;
+ text-decoration: none;
+ cursor: pointer;
+ font-size: 16px;
+}
+#order .checkout .orderSubmit .submit:hover {
+ background-color: #44C4EE;
+}
+/* -- contact-box -- */
+#order .contact-box .overlay {
+ position: fixed;
+ top: 0;
+ left: 0;
+ width: 100%;
+ height: 100%;
+ background-color: rgba(0, 0, 0, 0.5);
+ z-index: 1000;
+}
+#order .contact-box .popup {
+ position: fixed;
+ bottom: -100%; /* 初始位置在屏幕外 */
+ left: 0;
+ width: 100%;
+ background-color: white;
+ z-index: 1001; /* 在遮罩层之上 */
+ transition: bottom 0.3s ease-out;
+}
+#order .contact-box .popup.active {
+ bottom: 0; /* 弹出到屏幕底部 */
+}
+#order .contact-box .head {
+ font-size: 16px;
+ font-weight: bold;
+ padding: 15px 25px 0 25px;
+ zoom: 1;
+ overflow: hidden;
+}
+#order .contact-box .head i {
+ float: right;
+ font-size: 25px;
+ cursor: pointer;
+}
+#order .contact-box .box {
+ padding: 10px;
+ max-height: 60vh;
+ overflow: auto;
+}
+#order .contact-box .list {
+}
+#order .contact-box .list .item {
+ padding: 15px;
+ cursor: pointer;
+}
+#order .contact-box .list .item i {
+ font-size: 20px;
+ margin-right: 10px;
+}
+#order .contact-box .list .item.active {
+ border: 1px solid #19B4EA;
+ color: #19B4EA;
+}
+#order .contact-box .list .item.active i {
+ color: #19B4EA;
+}
+#order .contact-box .form {
+ padding: 15px 16px;
+}
+/* -- checkout 页面精修（仅结算页，不影响收银台） -- */
+#order .checkout:not(.cashier) > h3 {
+ font-size: 20px;
+ font-weight: 600;
+ color: #333;
+ margin: 0 0 18px;
+}
+#order .checkout:not(.cashier) .checkBox {
+ border: 1px solid #eee;
+ padding: 24px;
+}
+#order .checkout:not(.cashier) .checkBox .box {
+ border-bottom: 1px solid #f0f0f0;
+ padding-bottom: 22px;
+ margin-bottom: 22px;
+}
+#order .checkout:not(.cashier) h2 {
+ font-size: 15px;
+ font-weight: 600;
+ color: #333;
+ margin-bottom: 14px;
+}
+#order .checkout:not(.cashier) h2 .more {
+ float: right;
+ font-size: 13px;
+ font-weight: normal;
+ color: #0072c6;
+ margin-top: 2px;
+}
+/* 收货地址 */
+#order .checkout:not(.cashier) .address {
+ position: relative;
+ background: #fafafa;
+ border: 1px solid #eee;
+ padding: 16px 18px;
+}
+#order .checkout:not(.cashier) .address .title {
+ margin-bottom: 10px;
+ color: #333;
+ font-weight: 600;
+}
+#order .checkout:not(.cashier) .address .title .edit {
+ font-size: 13px;
+ font-weight: normal;
+ display: inline-block;
+ border: 1px solid #ddd;
+ background: #fff;
+ color: #999;
+ padding: 4px 14px;
+ margin-left: 8px;
+ line-height: 20px;
+ cursor: pointer;
+ transition: border-color .15s, color .15s;
+}
+#order .checkout:not(.cashier) .address .title .edit:hover {
+ border-color: #0072c6;
+ color: #0072c6;
+}
+#order .checkout:not(.cashier) .address .item {
+ margin-bottom: 6px;
+ color: #333;
+}
+#order .checkout:not(.cashier) .address .item em {
+ color: #999;
+ margin-right: 4px;
+}
+#order .checkout:not(.cashier) .action {
+ position: absolute;
+ right: 18px;
+ top: 16px;
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ font-size: 13px;
+ text-align: right;
+}
+#order .checkout:not(.cashier) .action .switch,
+#order .checkout:not(.cashier) .action .add {
+ display: inline-block;
+ margin: 0;
+ border: 1px solid #ddd;
+ background: #fff;
+ color: #666;
+ padding: 4px 14px;
+ cursor: pointer;
+ font-size: 13px;
+ line-height: 20px;
+ transition: border-color .15s, color .15s;
+}
+#order .checkout:not(.cashier) .action .switch {
+ color: #0072c6;
+}
+#order .checkout:not(.cashier) .action .switch:hover,
+#order .checkout:not(.cashier) .action .add:hover {
+ border-color: #0072c6;
+ color: #0072c6;
+}
+/* 配送方式 */
+#order .checkout:not(.cashier) .shipping dl {
+ display: flex;
+ flex-wrap: wrap;
+ align-items: center;
+ gap: 6px 16px;
+ padding: 12px 16px;
+ border: 1px solid #eee;
+ margin-bottom: 10px;
+}
+#order .checkout:not(.cashier) .shipping dl:last-child {
+ margin-bottom: 0;
+}
+#order .checkout:not(.cashier) .shipping dt {
+ flex: 1 1 auto;
+ width: auto;
+ float: none;
+ color: #333;
+}
+#order .checkout:not(.cashier) .shipping dd {
+ width: auto;
+ float: none;
+ font-size: 13px;
+}
+#order .checkout:not(.cashier) .shipping dd:first-of-type {
+ order: 3;
+ flex: 0 0 100%;
+ color: #999;
+}
+#order .checkout:not(.cashier) .shipping dd:last-of-type {
+ order: 2;
+ color: #666;
+}
+#order .checkout:not(.cashier) .shipping dd b.price {
+ color: #cc0000;
+}
+/* 优惠券 */
+#order .checkout:not(.cashier) .coupon .item {
+ padding: 8px 0;
+}
+#order .checkout:not(.cashier) .coupon .item label {
+ display: inline-flex;
+ align-items: center;
+ flex-wrap: wrap;
+ gap: 4px;
+}
+#order .checkout:not(.cashier) .coupon .item em {
+ color: #999;
+ font-size: 13px;
+ margin-left: 4px;
+}
+#order .checkout:not(.cashier) .coupon .item b.price {
+ color: #cc0000;
+ margin-left: 4px;
+}
+/* 商品清单 */
+#order .checkout:not(.cashier) .cartBox {
+ border: 1px solid #eee;
+}
+#order .checkout:not(.cashier) .cartBox dl {
+ padding: 14px 0;
+ border-bottom: 1px solid #f0f0f0;
+ align-items: center;
+ line-height: 1.5;
+}
+#order .checkout:not(.cashier) .cartBox dl:last-of-type {
+ border-bottom: 0;
+}
+#order .checkout:not(.cashier) .cartBox dl.head {
+ padding: 12px 0;
+ background: #fafafa;
+ border-bottom: 1px solid #eee;
+}
+#order .checkout:not(.cashier) .cartBox dl.head b {
+ font-size: 13px;
+ color: #999;
+}
+#order .checkout:not(.cashier) .cartBox dt {
+ padding-left: 18px;
+}
+#order .checkout:not(.cashier) .cartBox dt a {
+ align-items: center;
+ color: #333;
+}
+#order .checkout:not(.cashier) .cartBox dt a img {
+ width: 56px;
+ height: 56px;
+ object-fit: cover;
+ border: 1px solid #f0f0f0;
+ margin-right: 12px;
+}
+#order .checkout:not(.cashier) .cartBox dd.last {
+ padding-right: 18px;
+}
+#order .checkout:not(.cashier) .cartBox dd.subtotal {
+ color: #333;
+ font-weight: 600;
+}
+#order .checkout:not(.cashier) .price-cue {
+ border-radius: 0;
+}
+/* 金额汇总 */
+#order .checkout:not(.cashier) .totalAmount {
+ margin: 24px 0;
+ padding: 18px 20px;
+ background: #fafafa;
+ border: 1px solid #eee;
+ display: flex;
+ justify-content: flex-end;
+}
+#order .checkout:not(.cashier) .totalAmount .list {
+ float: none;
+ width: 340px;
+}
+#order .checkout:not(.cashier) .totalAmount dl {
+ display: flex;
+ justify-content: space-between;
+ align-items: baseline;
+ text-align: left;
+ margin-bottom: 8px;
+ line-height: 1.6;
+}
+#order .checkout:not(.cashier) .totalAmount dl:last-child {
+ margin: 10px 0 0;
+ padding-top: 10px;
+ border-top: 1px dashed #ddd;
+}
+#order .checkout:not(.cashier) .totalAmount dt {
+ float: none;
+ width: auto;
+ color: #999;
+}
+#order .checkout:not(.cashier) .totalAmount dd {
+ float: none;
+ width: auto;
+ color: #333;
+}
+#order .checkout:not(.cashier) .totalAmount b {
+ color: #333;
+ margin-right: 0;
+ font-weight: 600;
+}
+#order .checkout:not(.cashier) .totalAmount dl:last-child dt {
+ color: #333;
+ font-weight: 600;
+}
+#order .checkout:not(.cashier) .totalAmount dl:last-child dd {
+ color: #cc0000;
+ font-size: 22px;
+ font-weight: 700;
+ line-height: 1;
+}
+/* 提交区 */
+#order .checkout:not(.cashier) .orderSubmit {
+ display: flex;
+ align-items: center;
+ justify-content: flex-end;
+ gap: 18px;
+ text-align: right;
+}
+#order .checkout:not(.cashier) .orderSubmit .orderAmount {
+ margin-right: 0;
+ font-size: 14px;
+ color: #666;
+}
+#order .checkout:not(.cashier) .orderSubmit .orderAmount b {
+ font-size: 22px;
+ font-weight: 700;
+ color: #cc0000;
+ margin-left: 2px;
+}
+#order .checkout:not(.cashier) .orderSubmit .submit {
+ background: #0072c6;
+ color: #fff;
+ padding: 13px 52px;
+ font-size: 16px;
+ font-weight: 600;
+ border: 0;
+ cursor: pointer;
+ transition: background-color .15s;
+}
+#order .checkout:not(.cashier) .orderSubmit .submit:hover {
+ background: #007ad5;
+}
+@media (max-width: 768px) {
+ #order .checkout:not(.cashier) .checkBox {
+  border: 0;
+  padding: 0;
+ }
+ #order .checkout:not(.cashier) .action {
+  position: static;
+  margin-top: 12px;
+  justify-content: flex-end;
+ }
+ #order .checkout:not(.cashier) .totalAmount .list {
+  width: 100%;
+ }
+ #order .checkout:not(.cashier) .orderSubmit {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+ }
+ #order .checkout:not(.cashier) .orderSubmit .orderAmount {
+  text-align: right;
+ }
+ #order .checkout:not(.cashier) .orderSubmit .submit {
+  width: 100%;
+ }
+}
+/* -- complete -- */
+#order .complete {
+ border: 1px solid #E4E4E4;
+ padding: 130px 0;
+ text-align: center;
+}
+#order .complete p {
+ padding: 15px 0;
+}
+#order .complete p.title {
+ font-weight: bold;
+ font-size: 16px;
+}
+#order .complete p.info {
+ color: #19B4EA;
+ font-size: 26px;
+}
+#order .complete p.info b {
+ color: red;
+ margin-right: 3px;
+}
+/* -- cashier -- */
+#order .cashier .info {
+ font-size: 14px;
+ margin: 10px 0;
+ color: #999;
+}
+#order .cashier .info .orderAmount {
+ float: right;
+}
+#order .cashier .info .orderAmount b {
+ color: red;
+}
+#order .cashier .payBox {
+ text-align: center;
+ padding: 50px 0 50px 0;
+}
+#order .cashier .otherPay {
+ margin-top: 10px;
+}
+#order .cashier .otherPay a {
+ font-size: 14px;
+ color: #0072C6;
+}
+#order .cashier .amountSummary {
+ margin: 15px 0;
+ padding: 12px 18px;
+ background-color: #FAFAFA;
+ border: 1px solid #EEE;
+}
+#order .cashier .amountSummary ul {
+ margin: 0;
+ padding: 0;
+ list-style: none;
+}
+#order .cashier .amountSummary li {
+ display: flex;
+ justify-content: space-between;
+ line-height: 28px;
+ color: #666;
+}
+#order .cashier .amountSummary li .price {
+ color: #666;
+}
+#order .cashier .amountSummary li.payable {
+ border-top: 1px dashed #DDD;
+ margin-top: 6px;
+ padding-top: 6px;
+ font-size: 16px;
+ color: #333;
+}
+#order .cashier .amountSummary li.payable .price {
+ color: #e94709;
+ font-weight: bold;
+}
+#order .cashier .amountSummary li .deduct {
+ color: #e94709;
+}
+/* -- 收银台余额支付 -- */
+#order .cashier .walletPay {
+ background-color: #FAFAFA;
+ border: 1px solid #EEE;
+ padding: 15px 18px 16px 18px;
+ margin-bottom: 20px;
+}
+#order .cashier .walletPay h2 {
+ margin-bottom: 10px;
+}
+#order .cashier .walletPay .walletBalance {
+ color: #e94709;
+}
+#order .cashier .walletSwitch {
+ display: inline-flex;
+ align-items: center;
+ font-size: 14px;
+ color: #333;
+ cursor: pointer;
+}
+#order .cashier .walletSwitch input {
+ margin: 0 6px 0 0;
+}
+#order .cashier .payment dd {
+ display: flex;
+ align-items: center;
+ min-height: 41px;
+ margin-bottom: 10px;
+}
+#order .cashier .payment dd input {
+ margin: 0 8px 0 0;
+}
+#order .cashier .payment dd img {
+ display: block;
+ border: 1px solid #EEE;
+ border-radius: 3px;
+}
+#order .cashier .payment dd input:checked + label img {
+ border-color: #19B4EA;
+}
+#order .cashier .paymentEmpty {
+ color: #999;
+ font-size: 13px;
+}
+#order .cashier .orderSubmit .submit[disabled] {
+ background-color: #C8C8C8;
+ cursor: not-allowed;
+}
+@media (max-width: 640px) {
+ #order .cashier .payment dd {
+  float: none;
+  width: auto;
+ }
+}
+/* -- 失效商品 / 库存不足 -- */
+#order .cartInvalid {
+ margin-top: 20px;
+ border: 1px solid #EEE;
+ background-color: #FAFAFA;
+ padding: 15px 20px;
+}
+#order .cartInvalid h3 {
+ margin: 0 0 10px 0;
+ font-size: 16px;
+ color: #666;
+ font-weight: normal;
+}
+#order .cartInvalid .item {
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ padding: 8px 0;
+ border-bottom: 1px dashed #EEE;
+}
+#order .cartInvalid .item em {
+ flex: 1;
+ font-style: normal;
+ color: #666;
+}
+#order .cartInvalid .item i {
+ font-style: normal;
+ font-size: 12px;
+ color: #999;
+}
+#order .cartInvalid .item a {
+ color: #0072C6;
+ font-size: 12px;
+}
+#order .cartInvalid .action {
+ margin-top: 10px;
+ text-align: right;
+}
+#order .cartInvalid .action a {
+ color: #0072C6;
+}
+#order .stock-shortage {
+ display: block;
+ margin-top: 4px;
+ font-size: 12px;
+ font-style: normal;
+ color: #e94709;
+}

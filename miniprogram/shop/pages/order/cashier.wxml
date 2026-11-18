@@ -1,0 +1,31 @@
+<!--cashier.wxml-->
+<navbar title="{{title}}"></navbar>
+<view class="body">
+ <view class='body miniH'>
+  <view class="cashier checkout">
+   <view class="info">
+    <view class="p">{{lang.order_cashier_pay}}</view>
+    <view class="orderSn">{{lang.order_sn}}：{{order.order_sn}}</view>
+   </view>
+   <view class="checkBox">
+    <view class="box">
+     <view class="h2">{{lang.order_payment}}</view>
+     <view class="payment">
+      <view class="dd {{payment == item.slug ? 'cur' : ''}}" wx:for="{{payment_list}}" wx:key="slug" data-slug="{{item.slug}}" bindtap="selectPayment">
+       <image src="{{item.icon}}" wx:if="{{item.icon}}" />
+       <text wx:else>{{item.name}}</text>
+      </view>
+      <view class="cue" wx:if="{{payment_list.length == 0}}">{{lang.order_payment_empty}}</view>
+     </view>
+    </view>
+    <view class="fixex">
+     <view class="orderSubmit">
+      <view class="em">{{lang.order_amount_payable}}：<text class="order_amount">{{payableText || order.order_amount_format}}</text></view>
+      <view class="submit" wx:if="{{payment_list.length > 0}}"><text class="btnSubmit" data-order_sn="{{order.order_sn}}" bindtap="submit">{{paying ? lang.order_paying : lang.order_cashier_pay_btn}}</text></view>
+     </view>
+    </view>
+   </view>
+  </view>
+ </view>
+ <view class="footer"><text wx:if="{{lang.powered_by}}">{{lang.powered_by}}</text></view>
+</view>

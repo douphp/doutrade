@@ -1,0 +1,281 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Admin\Service\Product;
+
+use Dou\Admin\Model\Product\ProductCategory;
+use Dou\Admin\Service\Concerns\SavesLanguageDrafts;
+use Dou\Admin\Service\Nav\NavCategorySyncService;
+use Dou\Core\Facade\DB;
+use Dou\Core\Foundation\Configuration\Config;
+use Dou\Core\Foundation\Exception\DomainException;
+use Dou\Core\Service\Admin\AdminLogAction;
+use Dou\Core\Service\Attachment\AttachmentUploadOptions;
+use Dou\Core\Service\BaseService;
+use Dou\Core\Support\Arr;
+use Dou\Core\Support\Check;
+use Dou\Core\Web\Http\UploadedFile;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 后台商品分类业务服务（与 CategoryController 对应）
+ *
+ * 格式校验（required / alpha_dash / unique）已上移至 CategoryFormRequest；
+ * 此处只做纯业务规则判断，
+ * 失败时抛出 DomainException，由全局处理器统一输出提示。
+ */
+class CategoryService extends BaseService
+{
+    use SavesLanguageDrafts;
+
+    /** @var NavCategorySyncService */
+    private $navCategorySync;
+
+    /**
+     * @param NavCategorySyncService $navCategorySync
+     */
+    public function __construct(NavCategorySyncService $navCategorySync)
+    {
+        $this->navCategorySync = $navCategorySync;
+    }
+
+    /**
+     * 分类树（无层级缩进列表）
+     *
+     * @param int|null $currentId 要排除的分类ID（用于父级下拉，可选）
+     * @return array
+     */
+    public function flat($currentId = '')
+    {
+        $category = ProductCategory::flat($currentId);
+        if ($currentId === '' && !empty(Config::get('features.attribute', false))) {
+            foreach ($category as &$cat) {
+                $cat['attribute_list'] = DB::table('attribute')
+                    ->where('category_id', $cat['id'])
+                    ->field('id, name')
+                    ->select();
+            }
+            unset($cat);
+        }
+
+        return $category;
+    }
+
+    /**
+     * 新增表单默认数据
+     *
+     * @return array
+     */
+    public function buildCategoryDefaultData()
+    {
+        return array(
+            'id' => '',
+            'name' => '',
+            'slug' => '',
+            'icon' => '',
+            'parent_id' => 0,
+            'keywords' => '',
+            'description' => '',
+            'sync_to_nav' => '0',
+            'sort' => 50,
+        );
+    }
+
+    /**
+     * 编辑表单：按主键取分类
+     *
+     * @param int $catId
+     * @return array|null
+     */
+    public function buildCategoryEditData($catId)
+    {
+        $rowModel = ProductCategory::find((int) $catId);
+        if (!$rowModel) {
+            return null;
+        }
+
+        $catInfo = $rowModel->getAttributes();
+        $catInfo['file_number'] = Check::fileNumber($catInfo['icon']) ? $catInfo['icon'] : '';
+        $catInfo['icon'] = Check::fileNumber($catInfo['icon']) ? attachment()->url($catInfo['icon']) : $catInfo['icon'];
+
+        return $catInfo;
+    }
+
+    /**
+     * 新增提交（格式校验已由 CategoryFormRequest 完成）
+     *
+     * @see \Dou\Admin\Request\Product\CategoryFormRequest::rules()
+     *
+     * @param array $data
+     * @param int $adminId
+     * @return int 新增分类主键
+     */
+    public function insert(array $data, $adminId)
+    {
+        $adminId = (int) $adminId;
+        if ($adminId <= 0) {
+            throw new DomainException(lang('illegal'), route('admin.product.category'));
+        }
+
+        $iconMode = Config::get('site.open_icon', '');
+        $textIcon = $iconMode === 'text' ? Arr::get($data, 'icon', '') : '';
+        $iconFile = $iconMode === 'image' ? UploadedFile::fromGlobals('icon') : null;
+        $icon = attachment()->reserve('product_category', $iconFile, 'admin', $adminId, 'main', AttachmentUploadOptions::create());
+        $data['icon'] = $iconMode === 'image' ? $icon : $textIcon;
+
+        $languagePlan = $this->languageDraftBegin('product_category', $data, 0, $adminId);
+        $newCatId = (int) DB::transaction(function () use ($data, $icon, $adminId, $languagePlan) {
+            $category = ProductCategory::create($data);
+            if (!$category) {
+                throw new DomainException(lang('illegal'), route('admin.product.category'));
+            }
+            $newCatId = (int) $category->getKey();
+            if ($newCatId <= 0) {
+                throw new DomainException(lang('operation_failed'));
+            }
+
+            $this->languageDraftCommit($languagePlan, $newCatId, $adminId);
+            if ($icon !== '' && attachment()->adopt('product_category', $icon, $newCatId, 'admin', $adminId) < 1) {
+                throw new DomainException(lang('file_claim_failed'));
+            }
+
+            return $newCatId;
+        });
+
+        $this->languageDraftPurge($languagePlan, $newCatId);
+
+        if (isset($data['sync_to_nav']) && (int) $data['sync_to_nav'] === 1) {
+            $this->navCategorySync->syncForCategory('product_category', $newCatId);
+        }
+
+        audit()->writeAdminLog($adminId, AdminLogAction::CREATE, 1, (string) $data['name']);
+
+        return $newCatId;
+    }
+
+    /**
+     * 更新提交（格式校验已由 CategoryFormRequest 完成）
+     *
+     * @see \Dou\Admin\Request\Product\CategoryFormRequest::rules()
+     *
+     * @param array $data
+     * @param int $adminId
+     * @return void
+     */
+    public function update(array $data, $adminId)
+    {
+        $adminId = (int) $adminId;
+        if (!isset($data['category_id']) || $adminId <= 0) {
+            throw new DomainException(lang('illegal'), route('admin.product.category'));
+        }
+
+        $catId = (int) $data['category_id'];
+        if ($catId <= 0) {
+            throw new DomainException(lang('illegal'), route('admin.product.category'));
+        }
+        $catOldModel = ProductCategory::find($catId);
+        if (!$catOldModel) {
+            throw new DomainException(lang('item_not_exist'), route('admin.product.category'));
+        }
+        $cat_old = $catOldModel ? $catOldModel->getAttributes() : null;
+        $icon = $cat_old ? $cat_old['icon'] : '';
+        $oldIconNumber = $cat_old && isset($cat_old['icon']) ? (string) $cat_old['icon'] : '';
+        if (Config::get('site.open_icon', '') === 'image') {
+            $boxed = attachment()->store('product_category', $catId, UploadedFile::fromGlobals('icon'), 'main', AttachmentUploadOptions::create()->withPrimaryKey('id')->withBusinessField('icon')->withUploader('admin', $adminId));
+            $deleteIcon = ($boxed === '' && !empty($data['icon_delete']));
+            if ($boxed !== '') {
+                $icon = $boxed;
+            } elseif ($deleteIcon) {
+                $icon = '';
+            }
+        } elseif (Config::get('site.open_icon', '') === 'text') {
+            $icon = Arr::get($data, 'icon', '');
+        }
+        $data['icon'] = $icon;
+
+        $languagePlan = $this->languageDraftBegin('product_category', $data, $catId, $adminId);
+        try {
+            DB::transaction(function () use ($catOldModel, $data, $catId, $adminId, $languagePlan) {
+                $catOldModel->fill($data, 'update')->save();
+                $this->languageDraftCommit($languagePlan, $catId, $adminId);
+            });
+        } catch (\Exception $e) {
+            $this->languageDraftAbort($languagePlan);
+            throw $e;
+        }
+        $this->languageDraftPurge($languagePlan, $catId);
+        if (!empty($deleteIcon) && $oldIconNumber !== '') {
+            attachment()->delete($oldIconNumber);
+        }
+
+        if (isset($data['sync_to_nav']) && (int) $data['sync_to_nav'] === 1) {
+            $this->navCategorySync->syncForCategory('product_category', $catId);
+        }
+
+        audit()->writeAdminLog($adminId, AdminLogAction::UPDATE, 1, (string) $data['name']);
+    }
+
+    /**
+     * 删除：占用/子类拦截 → 二次确认 → 执行
+     *
+     * @param int $catId
+     * @param array $data
+     * @return array{message: string, back_url: string, timeout: string, confirm_url: string}
+     * @throws DomainException 业务阻断时抛出
+     */
+    public function delete($catId, array $data)
+    {
+        $cateInfoModel = ProductCategory::find((int) $catId);
+        if (!$cateInfoModel) {
+            throw new DomainException(lang('item_not_exist'), route('admin.product.category'));
+        }
+        $cateInfo = $cateInfoModel->getAttributes();
+        $catNameStr = $cateInfo['name'];
+
+        $isUsed = ProductCategory::hasRecords($catId);
+        $isParent = ProductCategory::hasChildCategory($catId);
+
+        if ($isUsed) {
+            $msg = preg_replace('/d%/Ums', $catNameStr, lang('product_category_del_is_used'));
+            throw new DomainException($msg, route('admin.product.category'), '3');
+        }
+        if ($isParent) {
+            $msg = preg_replace('/d%/Ums', $catNameStr, lang('product_category_del_is_parent'));
+            throw new DomainException($msg, route('admin.product.category'), '3');
+        }
+
+        if (!isset($data['confirm'])) {
+            $delCheck = preg_replace('/d%/Ums', $catNameStr, lang('del_check'));
+            return array(
+                'message' => $delCheck,
+                'back_url' => route('admin.product.category'),
+                'timeout' => '30',
+                'confirm_url' => route('admin.product.category.destroy', array('id' => (int) $catId)),
+            );
+        }
+
+        $this->navCategorySync->deleteForCategory('product_category', $catId);
+
+        ProductCategory::destroy((int) $catId);
+        audit()->writeAdminLog((int) auth('admin')->id(), AdminLogAction::DELETE, 1, (string) $catNameStr);
+
+        return array(
+            'message' => lang('product_category_del_succes'),
+            'back_url' => route('admin.product.category'),
+        );
+    }
+}

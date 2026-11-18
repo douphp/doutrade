@@ -1,0 +1,667 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Front\Init;
+
+use Dou\Core\Bootstrap\SiteBootstrap;
+use Dou\Core\Bootstrap\SystemBootstrap;
+use Dou\Core\Facade\DB;
+use Dou\Core\Facade\Portal;
+use Dou\Core\Foundation\Auth\GuestGuard;
+use Dou\Core\Foundation\Configuration\Config;
+use Dou\Core\Foundation\Container\Container;
+use Dou\Core\Foundation\Extension\Module;
+use Dou\Core\Foundation\Provider\ProviderRegistry;
+use Dou\Core\Init\InitTrait;
+use Dou\Core\Service\Form\FormService as FormCore;
+use Dou\Core\Service\Nav\MiniprogramNavigationBuilder;
+use Dou\Core\Service\Theme\SiteThemePolicy;
+use Dou\Core\Support\Cdkey;
+use Dou\Core\Support\Honeypot;
+use Dou\Core\Support\Util;
+use Dou\Core\Support\ViewVars;
+use Dou\Core\Utility\Fix;
+use Dou\Core\Web\Http\HttpResponseException;
+use Dou\Core\Web\Http\Request;
+use Dou\Core\Web\I18n\JsLangExporter;
+use Dou\Core\Web\Routing\JsRouteExporter;
+use Dou\Core\Web\Template\DouView;
+use Dou\Core\Web\Template\Prefilter\FrontPrefilter;
+use Dou\Core\Web\Template\TemplateRendererInterface;
+use Dou\Front\Controller\Asset\LangController;
+use Dou\Front\Http\FrontMessageResponder;
+use Dou\Front\Model\Link\Link;
+use Dou\Front\Model\Page\Page;
+use Dou\Front\Service\Nav\NavigationBuilder;
+use Dou\Front\Service\Seo\BreadcrumbBuilder;
+use Dou\Front\Service\Seo\SchemaService;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 前台初始化类。
+ *
+ * 封装前台启动逻辑，通过 boot() 实例方法调用。
+ * 业务侧通过 helper / 门面（DB::、auth('front')、message()、route()、Config::、locale() 等）
+ * 就近读取依赖。
+ */
+class Init
+{
+    use InitTrait;
+
+    /**
+     * 前台启动入口
+     *
+     * @param array $routeInfo 由 Router 解析后传入的路由信息 ['lang' => ..., 'is_home' => ...]
+     * @return void
+     */
+    public function boot(array $routeInfo = array())
+    {
+        $this->bootCommon($routeInfo);
+        $this->bootCore();
+        // 授权检测须早于视图引擎：SiteThemePolicy::effectiveTheme() 依 app.licensed 判定商业
+        // 主题（^m\d{3}$）是否降级 default；晚于 setupViewEngine 赋值会让已授权站点前台误回退。
+        $this->detectAuthorization();
+        // 先建立视图引擎（依赖 cfg，cfg 已在 bootCore 就绪）；
+        // 让后续 loadLanguageAndModules 里的 data/user 等能真正向模板注入变量。
+        $this->setupViewEngine();
+        $this->loadLanguageAndModules();
+        $this->assignCommonViewVars();
+        $this->checkSiteClosed();
+
+        ob_start();
+
+        // 支付对账兜底触发器：默认 1% 概率抽签，命中后通过 shutdown 钩子在响应输出之后异步执行，
+        // 装了 cron 的用户可在配置面板把概率分母调到 0 关闭本兜底。
+        $this->tryFirePaymentReconciliationLottery();
+    }
+
+    /**
+     * 抽签触发支付对账兜底：本身仅做一次 mt_rand 抽签，未命中立刻返回；
+     * 命中后注册 shutdown 钩子执行 flock 防并发的对账动作，对当前请求性能影响极小。
+     *
+     * @return void
+     */
+    private function tryFirePaymentReconciliationLottery()
+    {
+        try {
+            $container = Container::getInstance();
+            $lottery = $container->make(\Dou\Front\Service\Order\PaymentReconciliationLottery::class);
+            $lottery->tryTrigger();
+        } catch (\Exception $e) {
+            // 抽签触发器与主请求解耦，任何异常都吃掉，绝不影响前台输出
+        }
+    }
+
+    /**
+     * 插件独立入口（return_url、notify_url 等不经前台 Router）
+     *
+     * 完成与 {@see boot()} 相同的数据库与 bootCore 阶段，但不初始化视图引擎/主题模板，
+     * 仅加载语言包、模块 init、会员会话等，供支付回调脚本使用。
+     *
+     * 在 require 本方法前可为异步通知定义常量 DOU_PLUGIN_NOTIFY 为 true，
+     * 以避免发送 text/html 头（便于网关验响应体）。
+     *
+     * 脚本需在加载 core/bootstrap.php 之前定义 IN_DOUCO。
+     * 启动早期 baseUrl 随当前脚本路径变化（用于安装检测等）；站点对外根地址在 bootCore 后
+     * 以站点配置为准（如 Config::get('site.root_url')）。
+     * 支付回调等对外 URL 请在后台站点地址或网关中配置，勿依赖本处路径裁剪。
+     *
+     * @param array $routeInfo 与 boot() 相同；无语言前缀时可传 array()
+     * @return void
+     */
+    public function bootForPluginEntry(array $routeInfo = array())
+    {
+        $this->bootCommon($routeInfo);
+        $this->bootCore();
+        $this->detectAuthorization();
+        $this->loadLanguageAndModules();
+        $this->checkSiteClosed();
+
+        if (defined('DOU_PLUGIN_NOTIFY') && constant('DOU_PLUGIN_NOTIFY')) {
+            header('Cache-control: no-store, no-cache, must-revalidate');
+        } else {
+            header('Cache-control: private');
+            header('Content-type: text/html; charset=' . DOU_CHARSET);
+        }
+
+        ob_start();
+    }
+
+    /**
+     * 授权检测：解析云端下发的凭据文件，结果落入 Config::set('app.licensed', bool)。
+     *
+     * 由 boot() / bootForPluginEntry() 在 setupViewEngine() 之前显式调用（主题降级判定依赖本结果）。
+     *
+     * @return void
+     */
+    private function detectAuthorization()
+    {
+        Config::set('app.licensed', false);
+        if (file_exists($cdkeyFile = STORAGE_PATH . 'state/cdkey.php')) {
+            // 凭据由云端下发，按纯文本解析取值，不作为 PHP 源码执行。
+            $cdkey = Cdkey::read($cdkeyFile);
+            $decompileInit = $cdkey['code'];
+            if ($decompileInit === substr(md5(DOU_SHELL), 16) . Config::get('site.douphp_version', '') . Util::normalizeUrlHost(ROOT_URL)) {
+                Config::set('app.licensed', true);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 公共初始化步骤
+    // -----------------------------------------------------------------------
+
+    /**
+     * 执行两个入口共享的基础初始化步骤
+     *
+     * @param array $routeInfo
+     * @return void
+     */
+    private function bootCommon(array $routeInfo)
+    {
+        $this->startSession();
+        $this->setErrorReporting();
+        $this->setTimezone();
+
+        $this->computeRootUrl();
+        $this->resolveCurLang($routeInfo);
+        $this->loadCustomFile();
+    }
+
+    /**
+     * 解析当前语言（支持多语言前缀或 ?lang= 两种形式），结果写入 Locale 单例。
+     *
+     * @param array $routeInfo
+     * @return void
+     */
+    private function resolveCurLang(array $routeInfo)
+    {
+        $locale = locale();
+        $langFromRoute = isset($routeInfo['lang']) ? $routeInfo['lang'] : null;
+        if ($langFromRoute) {
+            $pack = str_replace('-', '_', $langFromRoute);
+            $locale->set('rewrite_open', $langFromRoute, $pack);
+        } elseif (!empty($_GET['lang']) && preg_match('/^[a-zA-Z]{2}_[a-zA-Z]{2}$/', $_GET['lang'])) {
+            $locale->set('rewrite_close', $_GET['lang'], $_GET['lang']);
+        } else {
+            $locale->reset();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 核心对象实例化
+    // -----------------------------------------------------------------------
+
+    /**
+     * 实例化核心对象、注册端侧门面、定义站点常量。
+     *
+     * @return void
+     */
+    private function bootCore()
+    {
+        $this->instantiateCoreObjects();
+
+        $container = Container::getInstance();
+
+        // 语言契约（Provider 惰性工厂：features 就绪后下方重注册，首次 language() 调用才解析）
+        ProviderRegistry::registerAll($container);
+
+        $this->instantiateCommonFactories();
+
+        SiteBootstrap::loadSite(true, (string) request()->baseUrl());
+        $this->initLogRuntime();
+        $this->applySiteDebugIni();
+
+        $this->defineShellConstants('dou', 'dou');
+
+        define('ROOT_URL', Config::get('site.root_url', '/'));
+        define('HOME_URL', Config::get('site.home_url', ROOT_URL));
+        define('PLUGIN_URL', ROOT_URL . 'plugin/');
+
+        $defaultLanguage = Config::get('site.language.default', '') ?: 'zh_cn';
+        $langPack = locale()->isActive() ? locale()->pack() : $defaultLanguage;
+        $boot = SystemBootstrap::loadCore(array(
+            'isAdmin' => false,
+            'langPack' => $langPack,
+            'includeAdminSort' => false,
+            'adminSort' => false,
+        ));
+
+        SiteBootstrap::loadParameter();
+        Config::set('module', isset($boot['module']) ? $boot['module'] : array());
+        Config::set('system', isset($boot['system']) ? $boot['system'] : array());
+        Config::set('features', isset($boot['features']) ? $boot['features'] : array());
+        $this->languageManifest = isset($boot['lang']) ? (array) $boot['lang'] : array();
+        Config::set('pagination', !empty(Config::get('site.display', '')) ? unserialize(Config::get('site.display', '')) : array());
+
+        // 会员衍生模块依赖检查：清单由 Module::userDerivedFeatures() 提供，阻断由 Router::dispatch 上的 Module::assertUserAvailable() 负责；
+        // 这里仅记录警告，不阻断启动。
+        $this->warnFeaturesRequireUser();
+
+        // features.language 此刻已生效：重注册一次 Provider，工厂闭包按最新 features 判定
+        // 真实现还是 Null；不在此处 make()，首次真正调用 language() / plugin() 时才解析。
+        ProviderRegistry::registerAll($container);
+
+        // 通用 Domain 服务
+        $container->instance(MiniprogramNavigationBuilder::class, new MiniprogramNavigationBuilder());
+
+        // 结构化数据标记（BreadcrumbBuilder 通过构造注入依赖 SchemaService，必须先注册）
+        $schemaService = new SchemaService();
+        $container->instance(SchemaService::class, $schemaService);
+
+        // 前台 ViewModel/Responder
+        $nav = new NavigationBuilder();
+        $breadcrumbBuilder = new BreadcrumbBuilder($schemaService);
+        $messageResponder = new FrontMessageResponder($nav, $breadcrumbBuilder);
+        $container->instance(NavigationBuilder::class, $nav);
+        $container->instance(BreadcrumbBuilder::class, $breadcrumbBuilder);
+        $container->instance(FrontMessageResponder::class, $messageResponder);
+        $container->instance(\Dou\Core\Contract\MessageResponderInterface::class, $messageResponder);
+        $container->instance(\Dou\Front\Service\Seo\SeoResolver::class, new \Dou\Front\Service\Seo\SeoResolver());
+        $container->instance(\Dou\Front\Service\Sort\ListSortOptionBuilder::class, new \Dou\Front\Service\Sort\ListSortOptionBuilder());
+    }
+
+    // -----------------------------------------------------------------------
+    // 语言包与模块初始化
+    // -----------------------------------------------------------------------
+
+    /**
+     * 加载语言包、执行模块初始化文件、初始化可选服务。
+     *
+     * @return void
+     */
+    private function loadLanguageAndModules()
+    {
+        if (defined('EXIT_INIT')) {
+            return;
+        }
+
+        // 多语言验证（先判模块与表是否存在，避免模块卸载后先查表报错）
+        $locale = locale();
+        if ($locale->isActive()) {
+            if (
+                !Config::get('features.language', false)
+                || !DB::tableExist('language')
+                || !DB::table('language')->where('language_pack', $locale->pack())->find()
+            ) {
+                throw new HttpResponseException(redirect(ROOT_URL));
+            } elseif ($locale->mode() === 'rewrite_open' && !Config::get('site.rewrite', false)) {
+                throw new HttpResponseException(redirect(ROOT_URL));
+            }
+        }
+
+        // 强制 HTTPS
+        if (Config::get('site.ssl', false) && HTTP !== 'https://') {
+            $sslHost = Container::getInstance()->make(Request::class)->host();
+            header('HTTP/1.1 301 Moved Permanently');
+            header('Location: https://' . $sslHost . $_SERVER['REQUEST_URI']);
+            exit;
+        }
+
+        // 授权检测已在 boot()/bootForPluginEntry() 中先于视图引擎完成（见 detectAuthorization()），
+        // 此处直接复用 Config::get('app.licensed') 的结果。
+
+        // 版权信息 / 语言包
+        $powerText = Util::fromCharCodes(array(0x50, 0x6f, 0x77, 0x65, 0x72, 0x65, 0x64, 0x20, 0x62, 0x79));
+        $this->loadLanguageFiles();
+        lang_set('copyright', lang_has('copyright')
+            ? preg_replace('/d%/Ums', Config::get('site.site_name', ''), lang('copyright'))
+            : '');
+        lang_set('powered_by', lang_has('powered_by')
+            ? preg_replace('/d%/Ums', $powerText, lang('powered_by'))
+            : '');
+
+        $container = Container::getInstance();
+
+        // 前台 auth guard：先以 GuestGuard 兜底，user 模块就位时再覆盖为真实 Auth Facade。
+        // 保证未装 user 的最小化站点上 `auth('front')` 也能解析到合法只读实例。
+        $this->registerAuthGuard('front', new GuestGuard());
+
+        if (Config::get('features.user', false)) {
+            $container->instance(
+                \Dou\Front\Service\User\UserCenterNavBuilder::class,
+                new \Dou\Front\Service\User\UserCenterNavBuilder()
+            );
+        }
+
+        if (Config::get('app.licensed', false)) {
+            lang_set('powered_by', '');
+        }
+
+        $hasViewEngine = $container->has(DouView::class);
+
+        if ($hasViewEngine) {
+            $engine = app(DouView::class);
+
+            // data 已是系统核心模块：整张 dict 无条件注入 $data；
+            // 同步以旧变量名 fragment 注入（补 mark 键），兼容存量主题 {$fragment.xxx} 标签。
+            $dataResult = data()->get();
+            $engine->assign('data', $dataResult);
+            $engine->assign('fragment', self::withLegacyFragmentMark($dataResult));
+
+            // 兼容存量主题 {$box_list.xxx} 标签：由 data 分组行（box 已并入 index 组）组装旧 box 结构。
+            $engine->assign('box_list', self::legacyBoxList());
+
+            // 表单定义（slug 索引，表单 meta 与字段平铺同层）：模板直接 {$form.quote.contact.name}。
+            // 受 features.form 门控，未装模块时注入空数组，保证 {$form.xxx} 始终可枚举。
+            $engine->assign(
+                'form',
+                Config::get('features.form', false) ? app(FormCore::class)->all() : array()
+            );
+        }
+
+        // 会员模块（核心实现类由云模块安装，未安装时跳过；通过 Module::make 解析以触发容器构造注入）
+        // 注：'front' guard 已在前面以 GuestGuard 兜底注册，本块负责 user 模块就绪后的
+        // 「真实 Auth 覆盖 + 身份恢复 + 业务数据查询」。
+        $userProfile = array();
+        $vipDetail = null;
+        $workDetail = array();
+        $distributionDetail = null;
+        $authState = array();
+        if (Config::get('features.user', false)) {
+            $userService = Module::make('user');
+            if ($userService !== null) {
+                $container->instance(\Dou\Core\Service\User\UserService::class, $userService);
+            }
+
+            $authClass = 'Dou\\Front\\Facade\\Auth';
+            $auth = class_exists($authClass) ? new $authClass() : null;
+            if (is_object($auth)) {
+                $this->registerAuthGuard('front', $auth);
+                if (method_exists($auth, 'hydrate')) {
+                    call_user_func(array($auth, 'hydrate'));
+                }
+
+                $user = user();
+                $userId = (int) $auth->id();
+                $userProfile = method_exists($auth, 'user') ? call_user_func(array($auth, 'user')) : array();
+                if (!is_array($userProfile)) {
+                    $userProfile = array();
+                }
+                $workDetail = method_exists($auth, 'work') ? call_user_func(array($auth, 'work')) : array();
+                $vipDetail = (is_object($user) && method_exists($user, 'vip'))
+                    ? call_user_func(array($user, 'vip'), $userId)
+                    : null;
+                $distributionDetail = (is_object($user) && method_exists($user, 'distribution'))
+                    ? call_user_func(array($user, 'distribution'), $userId)
+                    : null;
+                $authState = is_object($user)
+                    ? $container->make(\Dou\Front\Service\View\UserStateBuilder::class)->build($userId)
+                    : array(
+                        'is_login' => $userId > 0,
+                        'is_vip' => false,
+                        'is_work' => false,
+                        'is_distribution' => false,
+                    );
+            }
+        }
+
+        // 模板命名空间 $dou：无论 user 模块是否安装都装配，未装 / 未登录均落空骨架。
+        // 基础模块（首页 / 产品 / 文章 / 列表）的 .tpl 直接读 {$dou.auth.is_login} 等，
+        // 需要可预测的默认值，避免 PHP 8 + 模板严格模式下抛 "undefined index"。
+        if ($container->has(DouView::class)) {
+            $douRaw = array(
+                'user' => $userProfile,
+                'auth' => is_array($authState) ? $authState : array(),
+                'vip' => is_array($vipDetail) ? $vipDetail : array(),
+                'work' => is_array($workDetail) ? $workDetail : array(),
+                'distribution' => is_array($distributionDetail) ? $distributionDetail : array(),
+            );
+            app(DouView::class)->assign('dou', ViewVars::dou($douRaw));
+
+            // 兼容模板中以 $global_user.xxx 形态访问会员数据的写法（推荐统一走 $dou 命名空间）。
+            $legacyGlobalUser = $userProfile;
+            $legacyGlobalUser['vip'] = is_array($vipDetail) ? $vipDetail : false;
+            $legacyGlobalUser['work'] = !empty($workDetail) ? $workDetail : null;
+            $legacyGlobalUser['distribution'] = is_array($distributionDetail) ? $distributionDetail : false;
+            app(DouView::class)->assign('global_user', $legacyGlobalUser);
+        }
+
+        // 上传组件的草稿令牌：仅登录会员生成（游客上传在路由层即被拒），不写库；
+        // file 模块按 md5(token + '_' + prefix) 派生字段级草稿键，一个 token 服务整页多个上传字段。
+        // 游客也必须赋空串：include 参数在调用点即求值，未定义会报 Undefined array key。
+        if ($container->has(DouView::class)) {
+            $draftUserId = (int) auth('front')->id();
+            app(DouView::class)->assign(
+                'draft_token',
+                $draftUserId > 0 ? attachment()->newDraftToken('user', $draftUserId) : ''
+            );
+        }
+
+        // 短信服务（仅在 core/library/sms 存在时给模板打开短信验证码开关，
+        // 实际客户端由 \Dou\Vendor\Sms\Sms 在使用方按需创建）
+        if (file_exists(LIBRARY_PATH . 'sms/Sms.php')) {
+            if ($container->has(DouView::class)) {
+                app(DouView::class)->assign('sms_captcha', true);
+            }
+        }
+
+        // 核心扩展加载文件
+        if (file_exists($f = ROOT_PATH . 'include/core.load.php')) {
+            require($f);
+        }
+    }
+
+    /**
+     * 兼容旧 fragment 模板标签：为 data dict 逐行补 mark 键。
+     *
+     * 旧 fragment 行以 mark 作为数据标识（{$fragment.mark.xxx}），新版 data 行以
+     * code 标识；本方法按数组键（即 code）为顶层行与 child 子行补上 mark 别名，
+     * 已带 mark 的行不覆盖。
+     *
+     * @param array $data data()->get() 整张 dict
+     * @return array
+     */
+    private static function withLegacyFragmentMark(array $data)
+    {
+        foreach ($data as $code => &$row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (!array_key_exists('mark', $row)) {
+                $row['mark'] = (string) $code;
+            }
+            if (!empty($row['child']) && is_array($row['child'])) {
+                foreach ($row['child'] as $childCode => &$child) {
+                    if (is_array($child) && !array_key_exists('mark', $child)) {
+                        $child['mark'] = (string) $childCode;
+                    }
+                }
+                unset($child);
+            }
+        }
+        unset($row);
+
+        return $data;
+    }
+
+    /**
+     * 兼容旧 box 模板标签：组装 $box_list 全量集合（数字 + slug 双 key）。
+     *
+     * box 模块已退役：数据升级时并入 data 的 index 分组（与 fragment 同组，不再单独占组名）。
+     * 旧标签按分类标识取值，而 Portal::boxList() 由父行自身的分组/关联项推导子行，与组名无关，
+     * 故此处取本主题全部 is_class=1 分组行作为 slug 列表——同时覆盖历史已按 box 分组入库的站点
+     * 与仅经旧 transform 手工导入的站点。
+     *
+     * @return array
+     */
+    private static function legacyBoxList()
+    {
+        $theme = (string) Config::get('site.site_theme', '');
+
+        $parents = DB::table('data')
+            ->where('theme', $theme)
+            ->where('is_class', 1)
+            ->order('sort ASC, id ASC')
+            ->select();
+        if (!is_array($parents)) {
+            $parents = array();
+        }
+
+        $list = array();
+        foreach ($parents as $parent) {
+            if (!is_array($parent)) {
+                continue;
+            }
+            $slug = isset($parent['code']) ? (string) $parent['code'] : '';
+            if ($slug === '') {
+                continue;
+            }
+            $rows = Portal::boxList($slug);
+            $list[] = $rows;
+            $list[$slug] = $rows;
+        }
+
+        return $list;
+    }
+
+    // -----------------------------------------------------------------------
+    // 视图引擎专属初始化（仅前台 boot）
+    // -----------------------------------------------------------------------
+
+    /**
+     * 初始化视图引擎
+     *
+     * @return void
+     */
+    private function setupViewEngine()
+    {
+        $activeTheme = Container::getInstance()->make(SiteThemePolicy::class)->effectiveTheme();
+        // 前台覆盖 site.theme_url 为 SiteThemePolicy 降级后的值（修复未授权 + 商业主题
+        // 场景下 site.theme_url 指向商业目录但实际渲染回退 default 的路径错位）
+        $themeUrl = ROOT_URL . 'theme/' . $activeTheme . '/';
+        Config::set('site.theme_url', $themeUrl);
+
+        $engine = new DouView();
+        $engine->template_dir = ROOT_PATH . 'theme/' . $activeTheme;
+        $engine->compile_dir = STORAGE_PATH . 'cache/template/front';
+        $engine->leftDelimiter = '{';
+        $engine->rightDelimiter = '}';
+        $engine->setEscapeHtml(true);
+
+        if (!file_exists($engine->compile_dir)) {
+            mkdir($engine->compile_dir, 0777, true);
+        }
+
+        $engine->registerPrefilter(array(FrontPrefilter::class, 'apply'));
+
+        Container::getInstance()->instance(DouView::class, $engine);
+        // 同时按接口注册，供 ViewResponse / view() / BaseController::view() 面向接口解耦
+        Container::getInstance()->instance(TemplateRendererInterface::class, $engine);
+    }
+
+    /**
+     * 向视图引擎分配通用模板变量
+     *
+     * @return void
+     */
+    private function assignCommonViewVars()
+    {
+        $engine = app(DouView::class);
+        $langMenu = language()->getLangMenu(locale()->pack());
+
+        $staticUserToken = (string) csrf()->ensure('static_user');
+        $engine->assign('lang', lang_all());
+        $engine->assign('token', $staticUserToken);
+        $engine->assign('csrf_token', $staticUserToken);
+        $engine->assign('honeypot_ts', Honeypot::issueTimestamp());
+        $engine->assign('keyword', '');
+        $engine->assign('theme_path', Config::get('site.theme_url', ''));
+        $site = Config::get('site', array());
+        if (isset($site['qq']) && is_array($site['qq'])) {
+            foreach ($site['qq'] as $k => $qqRow) {
+                if (is_array($qqRow) && !array_key_exists('nickname', $qqRow)) {
+                    $site['qq'][$k]['nickname'] = '';
+                }
+            }
+        }
+        $engine->assign('site', $site);
+        $engine->assign('js_route_config_json', JsRouteExporter::toJsonScript(JsRouteExporter::buildFrontConfig()));
+        $engine->assign('js_routes_script_url', route('routes_js', array(), array('query' => array('v' => JsRouteExporter::manifestUrlVersion('Front')))));
+        $frontLangPack = LangController::currentPack();
+        $engine->assign('js_lang_script_url', route('lang_js', array(), array('query' => array('v' => JsLangExporter::manifestUrlVersion('front', $frontLangPack)))));
+        $engine->assign('about', Page::about());
+        $engine->assign('param', ViewVars::param(Config::get('param', array())));
+        // 存量主题兼容：data 已并入系统核心模块（恒为真），box / fragment 数据已迁移至 data
+        // 并以 $box_list / $fragment 变量代偿，三个功能开关恒为真，保证旧主题 {if $features.xxx} 门控继续放行。
+        $features = ViewVars::features(Config::get('features', array()));
+        $features['data'] = true;
+        $features['box'] = true;
+        $features['fragment'] = true;
+        $engine->assign('features', $features);
+        $engine->assign('link_list', class_exists(Link::class) ? Link::linkList() : array());
+        $engine->assign('lang_menu', $langMenu);
+        $engine->assign('generator', 'DouPHP v2.0');
+        $engine->assign('authorized', Config::get('app.licensed', false));
+        $engine->assign('url', (new Fix())->buildLegacyUrlMap((string) request()->routeModule()));
+        // 页面事实变量引擎级兜底（chat.md §3.4）：正常派发路径由 BaseController::pageFactVars 覆盖为真实命中；
+        // 未派发路径（兜底页等）保持空串，模板消费不报错。
+        $engine->assign('route_module', '');
+        $engine->assign('route_action', '');
+        // 全站 head 自定义代码默认值；详情页等控制器可再 assign 覆盖（如叠加 schema）
+        $engine->assign('code_head', Config::get('site.code_head', ''));
+        // common_header 购物车角标：未安装 order 模块或未登录为 0；与 order_cart 行数量汇总一致（角标用件数）
+        $cartTotal = 0;
+        if (Config::get('features.order', false)) {
+            $auth = auth('front');
+            if (is_object($auth)
+                && method_exists($auth, 'check') && method_exists($auth, 'id')
+                && $auth->check()) {
+                $userId = (int) $auth->id();
+                if ($userId > 0) {
+                    $cartTotal = (int) DB::table('order_cart')->where('user_id', $userId)->sum('item_number');
+                }
+            }
+        }
+        $engine->assign('cart_total', $cartTotal);
+        // 头部模板用 $index.cur 标记首页；非首页未由控制器赋值时避免 Undefined array key
+        $engine->assign('index', array('cur' => false));
+
+        // 兼容存量主题 {$fragment.about.image} 标签：data 字典未含 about 时补空骨架，避免模板严格模式报错
+        $fragment = array();
+        $assignedFragment = $engine->getAssigned('fragment');
+        if (is_array($assignedFragment)) {
+            $fragment = $assignedFragment;
+        }
+        if (!isset($fragment['about']) || !is_array($fragment['about'])) {
+            $fragment['about'] = array();
+        }
+        if (!array_key_exists('image', $fragment['about'])) {
+            $fragment['about']['image'] = '';
+        }
+        $engine->assign('fragment', $fragment);
+    }
+
+    // -----------------------------------------------------------------------
+    // 站点关闭检测
+    // -----------------------------------------------------------------------
+
+    /**
+     * 站点关闭检测
+     *
+     * @return void
+     */
+    private function checkSiteClosed()
+    {
+        if (Config::get('site.site_closed', false)) {
+            header('Content-type: text/html; charset=' . DOU_CHARSET);
+            echo '<meta http-equiv="Content-Type" content="text/html; charset=' . DOU_CHARSET . '">';
+            echo '<div style="margin:200px;text-align:center;font-size:14px"><p>' . lang('site_closed') . '</p></div>';
+            exit();
+        }
+    }
+}

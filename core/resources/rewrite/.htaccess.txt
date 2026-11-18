@@ -1,0 +1,48 @@
+<FilesMatch "\.(bak|inc|lib|sh|tpl|lbi|dwt|pem)$">
+    # Apache 2.4以下
+    Order Deny,Allow 
+    Deny from all
+ 
+    # Apache 2.4以上
+    # Require all denied
+</FilesMatch>
+
+RewriteEngine On
+
+# 安全拦截：运行时临时文件禁止访问，images 目录禁止执行脚本（含 x.php.jpg 变体）
+RewriteRule ^storage/tmp(/|$) - [F,L,NC]
+RewriteRule ^images/.*\.(php[0-9]?|phtml|phar|pht|cgi|pl|py|asp|aspx|jsp|shtml)($|\.) - [F,L,NC]
+
+# 透传 Authorization 头给 PHP：Apache + PHP-CGI/FPM 默认会吃掉它
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# 静态入口文件
+RewriteRule ^index\.html$  index.php  [L]
+
+# API 入口
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !.*\.(ico|gif|jpg|jpeg|png|js|css)
+RewriteRule ^api/(.+)$ api/index.php?route=$1 [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/?$      api/index.php [L,QSA]
+
+# 后台入口
+# service 与 admin/service/ 物理目录同名，须优先改写，故 service 规则不判 !-d
+RewriteRule ^admin/service/?$    admin/index.php?route=service    [L,QSA]
+RewriteRule ^admin/service/(.+)$ admin/index.php?route=service/$1 [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !.*\.(ico|gif|jpg|jpeg|png|js|css)
+RewriteRule ^admin/(.+)$ admin/index.php?route=$1 [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^admin/?$    admin/index.php [L,QSA]
+
+# 前台入口
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !.*\.(ico|gif|jpg|jpeg|png|js|css)
+RewriteRule ^([^?]*) index.php?route=$1 [L,QSA]

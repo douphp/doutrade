@@ -1,0 +1,135 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main has-submenu">
+   {include file="inc/submenu.tpl"}
+   <div class="dou-page">
+     <!-- {if $rec eq 'default'} 会员列表 -->
+     {include file="inc/page_header.tpl"}
+     <div class="filter">
+      <form action="{url link='admin.user.contact'}" method="get" onsubmit="return hideEmpty(this)">
+       <input name="username" type="text" class="input" value="{$req.username}" size="25" placeholder="{$lang.user_search_placeholder}" />
+       <input name="name" type="text" class="input" value="{$req.name}" placeholder="{$lang.user_contact_name}" size="20" />
+       <input name="phone" type="text" class="input" value="{$req.phone}" placeholder="{$lang.user_contact_phone}" size="20" />
+       <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+       <a class="btn-secondary" href="{url link='admin.user.contact'}">{$lang.btn_reset}</a>
+      </form>
+     </div>
+     <div id="list">
+       <table class="table">
+        <tr>
+         <th class="m-none text-center" width="40">{$lang.record_id}</th>
+         <th class="text-left">{$lang.user_contact_name}</th>
+         <th class="text-left">{$lang.user_account}</th>
+         <th class="text-center">{$lang.user_contact_phone}</th>
+         <!-- {if $features.book} -->
+         <th class="text-center">{$lang.user_contact_id_card}</th>
+         <!-- {else} -->
+         <th class="text-center">{$lang.user_contact_address}</th>
+         <!-- {/if} -->
+         <th class="text-center">{$lang.user_contact_tag}</th>
+         <th class="text-center">{$lang.user_contact_is_default}</th>
+         <th width="80" class="text-center">{$lang.handler}</th>
+        </tr>
+        <!-- {foreach from=$contact_list item=contact} -->
+        <tr>
+         <td class="m-none text-center">{$contact.id}</td>
+         <td>{$contact.name}</td>
+         <td><a href="{url link='admin.user.edit' id=$contact.user.id}">{$contact.user.username}</a></td>
+         <td class="text-center">{$contact.phone}</td>
+         <!-- {if $features.book} -->
+         <td class="text-center">{$contact.id_card}</td>
+         <!-- {else} -->
+         <td class="text-center">{$contact.address_full}</td>
+         <!-- {/if} -->
+         <td class="text-center">{$contact.tag}</td>
+         <td class="text-center">{$contact.is_default_format}</td>
+         <td class="text-center"><a href="{url link='admin.user.contact.edit' id=$contact.id}">{$lang.edit}</a> | <a href="javascript:;" class="js-delete" data-url="{url link='admin.user.contact.destroy' id=$contact.id}">{$lang.del}</a></td>
+        </tr>
+        <!-- {/foreach} -->
+       </table>
+     </div>
+     {include file="inc/pager.tpl"}
+     <!-- {/if} -->
+     <!-- {if $rec eq 'edit'} 会员信息编辑 -->
+     {include file="inc/page_header.tpl"}
+     <form action="{$form_action}" method="post" enctype="multipart/form-data"><input type="hidden" name="_method" value="{$form_method}" />
+      <div class="form">
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_name}<i>*</i></td>
+        <div class="input-block"><input name="name" type="text" class="input" value="{$contact.name}" size="35" />
+         <p id="name" class="cue"></p></div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_phone}<i>*</i></td>
+        <div class="input-block"><input name="phone" type="text" class="input" value="{$contact.phone}" size="35" />
+         <p id="phone" class="cue"></p></div>
+       </div>
+       <!-- {if $features.book} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_id_card}</td>
+        <div class="input-block"><input name="id_card" type="text" class="input" value="{$contact.id_card}" size="35" />
+         <p id="id_card" class="cue"></p></div>
+       </div>
+       <!-- {else} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_area}</td>
+        <div class="input-block">
+         <input name="country" type="text" class="input" value="{$contact.country}" size="20" />
+         <input name="province" type="text" class="input" value="{$contact.province}" size="20" />
+         <input name="city" type="text" class="input" value="{$contact.city}" size="20" />
+         <input name="district" type="text" class="input" value="{$contact.district}" size="20" />
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_address}</td>
+        <div class="input-block"><input name="address" type="text" class="input" value="{$contact.address}" size="55" />
+         <p id="address" class="cue"></p></div>
+       </div>
+       <!-- {/if} -->
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_tag}</td>
+        <div class="input-block"><input name="tag" type="text" class="input" value="{$contact.tag}" size="15" />
+         <p id="tag" class="cue"></p></div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.user_contact_is_default}</div>
+        <div class="input-block">
+         <label><input type="radio" name="is_default" value="1" {if $contact.is_default eq 1}checked{/if} /> {$lang.yes}</label>
+         <label><input type="radio" name="is_default" value="0" {if $contact.is_default neq 1}checked{/if} /> {$lang.no}</label>
+        </div>
+       </div>
+       <div class="form-item submit">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$contact.id}">
+        <input class="btn" type="submit" value="{$lang.btn_submit}" />
+       </div>
+      </div>
+     </form>
+     <!-- {/if} -->
+    </div>
+
+  </div>
+ </div>
+ {include file="inc/footer.tpl"} </div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+{literal}onload = function() {document.forms['action'].reset();}{/literal}
+</script>
+<!-- {/if} -->
+</body>
+</html>

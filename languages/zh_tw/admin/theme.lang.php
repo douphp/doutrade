@@ -1,0 +1,36 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+// 樣板
+$_LANG['theme'] = '設定樣板';
+$_LANG['theme_description'] = '簡介';
+$_LANG['theme_enabled'] = '當前啟用的樣板';
+$_LANG['theme_preview'] = '預覽樣板';
+$_LANG['theme_list'] = '管理樣板';
+$_LANG['theme_install'] = '取得更多樣板';
+$_LANG['theme_installed'] = '可用樣板';
+$_LANG['theme_delete'] = '刪除樣板';
+$_LANG['theme_no_allow'] = '未經授權不可使用';
+$_LANG['theme_no_support_module_hide'] = '隱藏當前樣板不支援的模組';
+$_LANG['theme_delete_current_denied'] = '當前啟用的樣板不可刪除，請先啟用其他樣板';
+$_LANG['theme_delete_default_denied'] = '預設樣板不可刪除（其他樣板的啟用以它為複製基準）';
+
+// 已安裝雲端樣板的重新安裝確認彈窗（theme.htm 已安裝列表，佔位符由 ThemeService 填充）
+$_LANG['theme_install_popup_title'] = '安裝提示';
+$_LANG['theme_install_popup_text'] = '樣板名稱：{theme}；支援模組：{modules}';
+$_LANG['theme_install_continue'] = '繼續安裝';
+
+// 參數設定項
+$_LANG['theme_support_module_lang'] = '當前啟用樣板支援的模組';
+$_LANG['theme_support_module_cue'] = '輸入模組英文名稱，以英文逗號隔開，如設定將會隱藏不支援的模組';

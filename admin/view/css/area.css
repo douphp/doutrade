@@ -1,0 +1,61 @@
+/* 地区管理
+----------------------------------------------- */
+/* 分区 Tab 沿用全局 .tab / .tab-nav（同后台设置页），此处仅补充提示行 */
+#area .area-tip {
+ margin-bottom: 15px;
+ color: #999;
+ font-size: 12px;
+}
+#area .area-tip em {
+ font-style: normal;
+ color: #666;
+}
+/* 层级树：任意深度的容器都横向换行排列，节点有下级时独占整行展开子树，
+   无下级时与兄弟并排，避免叶子层（如英文分区只有国家、省份）被拉成一列 */
+#area .list,
+#area .list .child-box {
+ display: flex;
+ flex-wrap: wrap;
+ align-items: flex-start;
+}
+#area .list .node {
+ flex: 0 0 auto;
+}
+#area .list .node.has-child {
+ flex: 1 0 100%;
+}
+#area .list .name {
+ display: inline-block;
+ border: 1px solid #DDD;
+ padding: 3px 15px;
+ margin: 0 15px 15px 0;
+}
+#area .list .lv1 > .name {
+ color: #000;
+ background-color: #e3e3e3;
+ font-size: 18px;
+ font-weight: bold;
+}
+#area .list .lv2 > .name {
+ color: #555;
+ font-weight: bold;
+}
+#area .list .lv3 > .name {
+ color: #888;
+}
+#area .list .lv4 > .name {
+ color: #AAA;
+ font-size: 12px;
+}
+#area .list .name:hover,
+#area .list .lv3 > .name:hover,
+#area .list .lv4 > .name:hover {
+ border: 1px solid #19B4EA;
+ background-color: #19B4EA;
+ color: #FFF;
+}
+#area .form .group-name {
+ display: inline-block;
+ line-height: 30px;
+ color: #666;
+}

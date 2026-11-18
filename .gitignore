@@ -1,0 +1,25 @@
+# 工具目录
+.cursor/
+.vscode/
+.reasonix
+.qoder/
+.trae/
+.agents/
+.editorconfig
+
+# Dou目录
+.dou/
+
+# 小程序 TypeScript 本地类型检查的临时目录（仅 tsc --noEmit 校验用，不发布、不入库）
+.tsverify/
+
+# 工具目录
+/devtools/*
+
+# 一些文件
+.gitattributes
+
+# 系统目录
+/storage/*
+
+

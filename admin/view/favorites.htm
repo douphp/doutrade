@@ -1,0 +1,79 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main has-submenu">
+   {include file="inc/submenu.tpl"}
+   <div class="dou-page">
+     <!-- {if $rec eq 'default'} 收藏夹开通记录 -->
+     {include file="inc/page_header.tpl"}
+     <div class="filter">
+      <form action="{url link='admin.favorites'}" method="get" onsubmit="return hideEmpty(this)">
+       <select class="select" name="key">
+        <!-- {foreach from=$key_list item=key} -->
+        <option value="{$key.value}"{if $key.cur} selected="selected"{/if}>{$key.name}</option>
+        <!-- {/foreach} -->
+       </select>
+       <input name="keyword" type="text" class="input" value="{$keyword}" size="20" />
+       <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+      </form>
+     </div>
+     <div id="list">
+      <form name="action" method="post" action="{url link='admin.favorites.action'}">
+       <input type="hidden" name="token" value="{$token}" />
+       <table class="table">
+        <tr>
+         <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+         <th class="m-none text-center" width="40">{$lang.record_id}</th>
+         <th class="text-left">{$lang.favorites_item_id}</th>
+         <th class="text-left">{$lang.favorites_user_id}</th>
+         <th class="m-none text-center">{$lang.favorites_created_at}</th>
+         <th width="80" class="text-center">{$lang.handler}</th>
+        </tr>
+        <!-- {foreach from=$favorites_list item=item} -->
+        <tr>
+         <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$item.id}" /></td>
+         <td class="m-none text-center">{$item.id}</td>
+         <td><a href="{$item.url}" target="_blank">{$item.name}</a></td>
+         <td><a href="{url link='admin.user.edit' id=$item.user.id}">{$item.user.username}</a></td>
+         <td class="m-none text-center">{$item.created_at}</td>
+         <td class="text-center"><a href="javascript:;" class="js-delete" data-url="{url link='admin.favorites.destroy' id=$item.id}">{$lang.del}</a></td>
+        </tr>
+        <!-- {/foreach} -->
+       </table>
+       <div class="action">
+        <select class="select" name="action">
+         <option value="0">{$lang.select}</option>
+         <option value="del_all">{$lang.del}</option>
+        </select>
+        <input class="btn" type="submit" value="{$lang.btn_execute}" />
+       </div>
+      </form>
+     </div>
+     {include file="inc/pager.tpl"}
+     <!-- {/if} -->
+    </div>
+
+  </div>
+ </div>
+ {include file="inc/footer.tpl"} </div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+{literal}onload = function() {document.forms['action'].reset();}{/literal}
+</script>
+<!-- {/if} -->
+</body>
+</html>

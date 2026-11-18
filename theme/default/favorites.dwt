@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="{$site.language.tag}">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/user.css" rel="stylesheet" type="text/css" />
+ <link href="css/favorites.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+</head>
+
+<body>
+ <div id="wrapper">
+  {include file="inc/common_header.tpl"}
+  <div class="container mb">
+   <div id="user">
+    <div class="userLeft"> {include file="inc/user_tree.tpl"} </div>
+    <div class="userIn">
+     <div class="main">
+      <!-- {if $rec eq 'user'} 收藏夹记录 -->
+      <h3>{$lang.favorites}</h3>
+      <div class="favorites-list">
+       <!-- {foreach from=$favorites_list item=item} -->
+       <div class="item-box">
+        <div class="item">
+         <div class="img"><a href="{$item.url}"><img src="{$item.image}" /></a></div>
+         <div class="name"><a href="{$item.url}">{$item.name}</a></div>
+         <!-- {if $item.price} -->
+         <div class="price-box"><em class="price">{$item.price}</em></div>
+         <!-- {/if} -->
+         <div class="action"><a href="javascript:;" onClick="addToCart('{$item.item_id}')">{$lang.order_addtocart}</a><a class="del" href="javascript:;" onclick="return douDelete('{$item.del_url}')">{$lang.del}</a></div>
+        </div>
+       </div>
+       <!-- {/foreach} -->
+      </div>
+      <!-- {if !$favorites_list} -->
+      <div class="empty-list">{$lang.favorites}{$lang.empty_list}</div>
+      <!-- {/if} -->
+      {include file="inc/pager.tpl"}
+      <!-- {/if} -->
+     </div>
+    </div>
+    <!-- /userIn -->
+   </div>
+  </div>
+  {include file="inc/common_footer.tpl"}
+ </div>
+ {include file="inc/code_footer.tpl"}
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+ <script type="text/javascript" src="js/input.js"></script>
+</body>
+
+</html>

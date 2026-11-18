@@ -1,0 +1,63 @@
+/* 评论
+----------------------------------------------- */
+#comment .list .reply {
+ color: #19B4EA;
+ margin-top: 5px;
+}
+/* comment-star */
+#comment .comment-star {
+}
+#comment .comment-star i {
+ font-size: 16px;
+ cursor: pointer;
+}
+#comment .comment-star.big i {
+ font-size: 20px;
+}
+#comment .comment-star i.active, #comment .comment-star i.hover {
+ color: #FF6408;
+}
+#comment .comment-star i.star-number {
+ font-size: 14px;
+ color: #333;
+ margin-left: 5px;
+}
+#comment .comment-star.big i.star-number {
+ font-size: 18px;
+ margin-left: 10px;
+}
+/* user-comment */
+#comment .item .user-comment {
+ border: 1px dotted #CCCCCC;
+ background-color: #F9F9F9;
+}
+#comment .item .user-comment dt {
+ font-weight: bold;
+ color: #555;
+ font-size: 16px;
+ padding: 10px;
+}
+#comment .item .user-comment dd {
+ padding: 10px;
+ color: #666;
+}
+#comment .item .user-comment .content {
+}
+#comment .item .user-comment .content p {
+ margin-bottom: 5px;
+ color: #777;
+}
+#comment .item .user-comment .reply {
+ background-color: #60BBFF;
+ color: #FFF;
+ padding: 10px;
+}
+#comment .item .user-comment .reply b {
+ margin-right: 35px;
+}
+#comment .item .reply {
+ margin-top: 30px;
+}
+#comment .item .reply-submit {
+ margin-top: 30px;
+}

@@ -1,0 +1,40 @@
+[ISAPI_Rewrite]
+
+CacheClockRate 3600
+RepeatLimit 32
+
+# 安全拦截：运行时临时文件禁止访问，images 目录禁止执行脚本（含 x.php.jpg 变体）
+# 须置于防循环规则之前，否则 .php 请求会先被放行
+RewriteRule ^storage/tmp(/|$) - [F,L,I]
+RewriteRule ^images/.*\.(php[0-9]?|phtml|phar|pht|cgi|pl|py|asp|aspx|jsp|shtml)($|\.) - [F,L,I]
+
+# 防循环：URL 已是 .php 结尾就停止，避免内部重写循环
+RewriteRule ^(.*\.php)$ $1 [L]
+
+# 静态入口文件
+RewriteRule ^index\.html$  /index.php [L]
+
+# API 入口（!-f/!-d 排除真实文件与真实目录）
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.+)$ /api/index.php?route=$1 [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/?$    /api/index.php [L,QSA]
+
+# 后台入口
+# admin/service 与物理目录同名，须优先路由，故 service 规则不判 !-d
+RewriteRule ^admin/service/?$ /admin/index.php?route=service [L,QSA]
+RewriteRule ^admin/service/(.+)$ /admin/index.php?route=service/$1 [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^admin/(.+)$ /admin/index.php?route=$1 [L,QSA]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^admin/?$    /admin/index.php [L,QSA]
+
+# 前台入口
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !.*\.(ico|gif|jpg|jpeg|png|js|css)
+RewriteRule ^(.+)$ /index.php?route=$1 [L,QSA]

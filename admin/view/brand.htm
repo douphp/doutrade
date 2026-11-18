@@ -1,0 +1,158 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/cropper.min.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+<script type="text/javascript" src="js/jquery.form.min.js"></script>
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div class="dou-page">
+   <!-- {if $rec eq 'default'} 品牌列表 -->
+   {include file="inc/page_header.tpl"}
+   <div class="filter">
+    <form action="{url link='admin.brand'}" method="get" onsubmit="return hideEmpty(this)">
+     <input name="keyword" type="text" class="input" value="{$keyword}" size="20" />
+     <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+    </form>
+    <span>
+    <!-- {if $features.sort} -->
+    <a class="btn-secondary js-post" href="{url link='admin.tool.sort' act=close}">{$lang.sort_close}</a>
+    <!-- {else} -->
+    <a class="btn-secondary js-post" href="{url link='admin.tool.sort' act=open}">{$lang.sort_open}</a>
+    <!-- {/if} -->
+    </span> </div>
+   <div id="list">
+    <form name="action" method="post" action="{url link='admin.brand.action'}">
+     <input type="hidden" name="token" value="{$token}" />
+     <table class="table">
+      <tr>
+       <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+       <th class="m-none text-center" width="40">{$lang.record_id}</th>
+       <th class="text-left">{$lang.brand_name}</th>
+       <th class="text-center">{$lang.brand_image}</th>
+       <!-- {if $features.sort} -->
+       <th class="m-none text-center" width="80">{$lang.sort}</th>
+       <!-- {/if} -->
+       <th class="m-none text-center" width="80">{$lang.created_at}</th>
+       <th width="80" class="text-center">{$lang.handler}</th>
+      </tr>
+      <!-- {foreach from=$brand_list item=brand} -->
+      <tr>
+       <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$brand.id}" /></td>
+       <td class="m-none text-center">{$brand.id}</td>
+       <td><a href="{url link='admin.brand.edit' id=$brand.id}">{$brand.name}</a></td>
+       <td class="text-center"><img src="{$brand.image}" height="30"></td>
+       <!-- {if $features.sort} -->
+       <td class="m-none text-center">{$brand.sort}</td>
+       <!-- {/if} -->
+       <td class="m-none text-center">{$brand.created_at}</td>
+       <td class="text-center"><a href="{url link='admin.brand.edit' id=$brand.id}">{$lang.edit}</a> | <a href="javascript:;" class="js-delete" data-url="{url link='admin.brand.destroy' id=$brand.id}">{$lang.del}</a></td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+     <div class="action">
+      <select class="select" name="action" onchange="douAction()">
+       <option value="0">{$lang.select}</option>
+       <option value="del_all">{$lang.del}</option>
+       <option value="category_move">{$lang.category_move}</option>
+      </select>
+      <select class="select" name="new_cat_id" style="display:none">
+       <option value="0">{$lang.uncategorized}</option>
+       <!-- {foreach from=$brand_category item=cate} -->
+       <!-- {if $cate.id eq $category_id} -->
+       <option value="{$cate.id}" selected="selected">{$cate.mark} {$cate.name}</option>
+       <!-- {else} -->
+       <option value="{$cate.id}">{$cate.mark} {$cate.name}</option>
+       <!-- {/if} -->
+       <!-- {/foreach} -->
+      </select>
+      <input class="btn" type="submit" value="{$lang.btn_execute}" />
+     </div>
+    </form>
+   </div>
+   <div class="clear"></div>
+   {include file="inc/pager.tpl"}
+   <!-- {/if} -->
+   <!-- {if $rec eq 'create' || $rec eq 'edit'} 品牌添加或编辑 -->
+   {include file="inc/page_header.tpl"}
+   <form action="{$form_action}" method="post" enctype="multipart/form-data"><input type="hidden" name="_method" value="{$form_method}" />
+   {include file="inc/language_drafts.tpl" drafts=$lang_drafts}
+    <div class="form">
+     <div class="form-item">
+      <div class="form-label">{$lang.brand_name}</div>
+      <div class="input-block">
+       <input type="text" name="name" value="{$brand.name}" size="60" class="input" />
+       <span class="action" data-field="name">{$btn_lang.name nofilter}</span> </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.brand_content}</div>
+      <div class="input-block">
+       <!-- 编辑器（所需变量：$cur、$item_id、$item_content） -->
+       {include file="inc/editor.tpl" name="content" value="$item_content"}
+       <p class="action" data-field="content">{$btn_lang.content nofilter}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.brand_image}</div>
+      <div class="input-block">
+       {include file="inc/file_image.tpl" name="image" value=$brand.image file_number=$brand.file_number}
+       <p class="action" data-field="image">{$btn_lang.image nofilter}</p>
+       </div>
+     </div>
+     <!-- {if $features.sort} -->
+     <div class="form-item">
+      <div class="form-label">{$lang.sort}</div>
+      <div class="input-block">
+       <input type="text" name="sort" value="{if $brand.sort}{$brand.sort}{else}50{/if}" size="5" class="input" />
+      </div>
+     </div>
+     <!-- {/if} -->
+     <div class="form-item">
+      <div class="form-label">{$lang.keywords}</div>
+      <div class="input-block">
+       <input type="text" name="keywords" value="{$brand.keywords}" size="113" class="input" />
+       <span class="action" data-field="keywords">{$btn_lang.keywords nofilter}</span> </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.description}</div>
+      <div class="input-block">
+       <textarea name="description" cols="115" rows="3" class="textarea">{$brand.description}</textarea>
+       <p class="action" data-field="description">{$btn_lang.description nofilter}</p>
+      </div>
+     </div>
+     <div class="form-item">
+      <!-- {if !$features.sort} -->
+      <input type="hidden" name="sort" value="{if $brand.sort}{$brand.sort}{else}50{/if}" />
+      <!-- {/if} -->
+      <input type="hidden" name="token" value="{$token}" />
+      <input type="hidden" name="id" value="{$brand.id}">
+      <input type="hidden" name="draft_token" value="{$draft_token}" />
+      <input class="btn" type="submit" value="{$lang.btn_submit}" />
+     </div>
+    </div>
+   </form>
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"} </div>
+<!-- {if $rec eq 'default'} -->
+<script type="text/javascript">
+{literal}onload = function() {document.forms['action'].reset();}{/literal}
+</script>
+<!-- {/if} -->
+<script type="text/javascript" src="js/cropper.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+(function ($) {
+  var meta = window.__douInstall || {};
+  var installId = meta.install_id || '';
+  var token = meta.token || '';
+  var steps = meta.steps || [];
+  var langPack = meta.lang || {};
+  var stepUrl = route('admin.cloud.install_step');
+  var progressUrl = route('admin.cloud.install_progress');
+
+  var $log = $('#dou-install-log');
+  if (!$log.length) { return; }
+
+  var currentStep = steps[0];
+  var seededLines = {};
+  var activeSpinner = null;
+  var activeLine = null;          // 当前进行中行（同一步骤循环时继续计时不重置）
+  var activeProgress = null;      // 进行中行进度 span（旋转圈前：N% 或「已用时 N 秒」）
+  var progressHasPercent = false; // 本行已显示真实百分比（秒表不再覆写）
+  var elapsedTimer = null;        // 秒表刷新 interval
+  var elapsedStart = 0;           // 当前行计时起点（毫秒时间戳）
+  var dlPollTimer = null;         // 下载进度轮询 interval
+  var dlPollFails = 0;            // 下载进度轮询连续失败次数
+  var stepOrder = ['preflight', 'download', 'unzip', 'snapshot', 'apply', 'finalize'];
+
+  // 服务端按 mode 裁剪了步骤列表：全新安装无 snapshot 还原点步骤，
+  // 此处同步剔除，避免跳到空步骤时凭空出现「正在创建升级还原点」提示。
+  function isPlannedStep(step) {
+    if (!steps.length) { return true; }
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i] === step) { return true; }
+    }
+    return false;
+  }
+
+  function escapeText(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function appendLog(text, cls) {
+    var $p = $('<p></p>');
+    if (cls) { $p.addClass(cls); }
+    $p.text(String(text == null ? '' : text));
+    $log.append($p);
+    return $p;
+  }
+
+  function appendLogHtml(html, cls) {
+    var $p = $('<p></p>');
+    if (cls) { $p.addClass(cls); }
+    $p.html(html);
+    $log.append($p);
+    return $p;
+  }
+
+  // 操作按钮行（完成态 / 失败态）：独立块级容器，便于 CSS 与上方结果行拉开固定间距
+  function appendActionRow(html) {
+    var $row = $('<div class="install-action-row"></div>');
+    $row.html(html);
+    $log.append($row);
+    return $row;
+  }
+
+  function pushLogs(logs, level) {
+    if (!logs || !logs.length) { return; }
+    for (var i = 0; i < logs.length; i++) {
+      var line = String(logs[i] == null ? '' : logs[i]);
+      if (seededLines[line]) {
+        continue;
+      }
+      appendLog(line, level === 'error' ? 'error' : '');
+    }
+  }
+
+  function seedLine(text) {
+    if (!text) { return null; }
+    if (seededLines[text]) { return seededLines[text]; }
+    var $p = appendLog(text);
+    seededLines[text] = $p;
+    return $p;
+  }
+
+  function predictStepText(step) {
+    if (step === 'download') {
+      // 离线升级：不再从云端下载，改为校验本地包目录内的安装包
+      if (meta.source === 'offline') {
+        return langPack.cloud_offline_step_verify || '';
+      }
+      var url = meta.download_url ? String(meta.download_url) : '';
+      var mode = meta.mode ? String(meta.mode) : '';
+      if (url === '' || mode === 'local') { return ''; }
+      return (langPack.cloud_down_ing_0 || '') + url + (langPack.cloud_down_ing_1 || '');
+    }
+    if (step === 'unzip') {
+      return langPack.cloud_unzip_ing || '';
+    }
+    if (step === 'snapshot') {
+      return langPack.cloud_snapshot_ing || '';
+    }
+    if (step === 'apply') {
+      var prefix = langPack.cloud_install_ing || '';
+      if (!prefix) { return ''; }
+      var typeLabel = meta.type_label ? String(meta.type_label) : '';
+      return prefix + typeLabel + '…';
+    }
+    return '';
+  }
+
+  function stopElapsedTimer() {
+    if (elapsedTimer) {
+      clearInterval(elapsedTimer);
+      elapsedTimer = null;
+    }
+  }
+
+  function formatElapsed() {
+    var sec = Math.floor((Date.now() - elapsedStart) / 1000);
+    // 不足 1 秒不显示秒表，避免快速完成的步骤留下「已用时 0 秒」
+    if (sec < 1) { return ''; }
+    // 语言串沿用项目 d% 占位约定
+    return String(langPack.cloud_step_elapsed || '已用时 d% 秒').replace('d%', String(sec));
+  }
+
+  function renderElapsed() {
+    if (!activeProgress || progressHasPercent) { return; }
+    var text = formatElapsed();
+    activeProgress.text(text === '' ? '' : ' ' + text);
+  }
+
+  function setActivePercent(pct) {
+    if (!activeProgress) { return; }
+    var n = parseInt(pct, 10);
+    if (isNaN(n)) { return; }
+    if (n < 0) { n = 0; }
+    if (n > 100) { n = 100; }
+    progressHasPercent = true; // 百分比保持到下次更新，期间秒表不覆写
+    activeProgress.text(' ' + n + '%');
+  }
+
+  function clearActiveSpinner() {
+    // 停表定格：旧行保留已显示的时间 / 百分比文本
+    stopElapsedTimer();
+    if (activeSpinner) {
+      activeSpinner.remove();
+      activeSpinner = null;
+    }
+    activeLine = null;
+    activeProgress = null;
+    progressHasPercent = false;
+  }
+
+  function setActiveSpinner($line) {
+    // 目标行未变（快照 / 下载分片循环）：同一行继续计时不重置
+    if ($line && $line.length && activeLine && $line.get(0) === activeLine.get(0)) {
+      return;
+    }
+    clearActiveSpinner();
+    if (!$line || !$line.length) { return; }
+    activeLine = $line;
+    activeProgress = $('<span class="install-step-progress"></span>');
+    activeSpinner = $('<i class="bi bi-arrow-repeat install-step-spinner" aria-hidden="true"></i>');
+    $line.append(activeProgress).append(' ').append(activeSpinner);
+    elapsedStart = Date.now();
+    renderElapsed();
+    elapsedTimer = setInterval(renderElapsed, 1000);
+  }
+
+  function attachStepSpinner(step) {
+    var idx = -1;
+    for (var i = 0; i < stepOrder.length; i++) {
+      if (stepOrder[i] === step) { idx = i; break; }
+    }
+    if (idx < 0) { idx = 0; }
+    for (var j = idx; j < stepOrder.length; j++) {
+      if (!isPlannedStep(stepOrder[j])) { continue; }
+      var text = predictStepText(stepOrder[j]);
+      if (text) {
+        var $line = seedLine(text);
+        if ($line) { setActiveSpinner($line); }
+        return;
+      }
+    }
+    clearActiveSpinner();
+  }
+
+  function seedInitialLogs() {
+    attachStepSpinner('download');
+  }
+
+  function buildRedirectLinkHtml(url, label, target) {
+    var safeUrl = escapeText(url);
+    var safeLabel = escapeText(label || langPack.cloud_account || url);
+    var attrs = 'class="btn" href="' + safeUrl + '"';
+    if (target === '_blank') {
+      attrs += ' target="_blank" rel="noopener"';
+    }
+    return '<a ' + attrs + '>' + safeLabel + '</a>';
+  }
+
+  function showFailure(data) {
+    var msg = data && data.error ? String(data.error) : '';
+    var redirectUrl = data && data.redirect_url ? String(data.redirect_url) : '';
+    var m = meta.mode ? String(meta.mode) : '';
+    var useUpdateHome = (m === 'update' || m === 'patch');
+    var backHref = useUpdateHome ? route('admin.cloud.update') : route('admin.index');
+    var backLabel = useUpdateHome
+      ? (langPack.cloud_update_home || '返回更新主页')
+      : (langPack.cloud_admin_home || '返回管理中心');
+
+    // 取包类步骤失败时引导到离线升级页：带全目标参数，可直接放置安装包后继续。
+    // 网络层失败（网关 503/504、超时、非 JSON）可能落在任意步骤（含 snapshot collect / apply
+    // 覆盖核心文件），不受步骤白名单限制：始终前置离线升级入口，与错误提示同屏给出。
+    // 授权类失败已自带跳转链接，不再叠加离线入口。
+    var offlineHtml = '';
+    var failedStep = currentStep ? String(currentStep) : '';
+    var offlineStep = failedStep === ''
+      || failedStep === 'preflight'
+      || failedStep === 'download'
+      || failedStep === 'unzip';
+    var networkFailed = !!(data && data.network_failed);
+    if ((offlineStep || networkFailed) && !redirectUrl && meta.offline_url) {
+      // 已在离线流程里失败：只留按钮，不再提示「可改用离线」
+      if (meta.source !== 'offline') {
+        var hint = langPack.cloud_install_offline_hint ? String(langPack.cloud_install_offline_hint) : '';
+        if (hint !== '') {
+          appendLog(hint);
+        }
+      }
+      var offlineLabel = langPack.cloud_install_offline_btn
+        ? String(langPack.cloud_install_offline_btn)
+        : '离线升级';
+      offlineHtml = '<a class="btn" href="' + escapeText(String(meta.offline_url)) + '">'
+        + escapeText(offlineLabel) + '</a>';
+    }
+
+    if (msg !== '' || redirectUrl !== '') {
+      var html = escapeText(msg);
+      if (redirectUrl !== '') {
+        if (html !== '') { html += ' '; }
+        html += buildRedirectLinkHtml(
+          redirectUrl,
+          data.redirect_label,
+          data.redirect_target
+        );
+      }
+      appendLogHtml(html, 'error');
+    }
+
+    appendActionRow(offlineHtml + '<a class="btn-secondary" href="' + backHref + '">' + escapeText(backLabel) + '</a>');
+  }
+
+  function showFinishActions(result) {
+    var back = (result && result.btn_back_html) ? String(result.btn_back_html) : '';
+    var action = (result && result.btn_action_html) ? String(result.btn_action_html) : '';
+    var note = (result && result.finish_note_html) ? String(result.finish_note_html) : '';
+    var m = meta.mode ? String(meta.mode) : '';
+    var isUpdate = (m === 'update' || m === 'patch');
+    // 更新/补丁：返回更新主页 → 查看还原点（同一行，还原点最后；无「启用」按钮）
+    // 全新安装：启用在前、返回在后（维持原顺序）
+    var html = isUpdate ? (back + action + note) : (action + back);
+    if (html !== '') { appendActionRow(html); }
+  }
+
+  function stopDownloadPoll() {
+    if (dlPollTimer) {
+      clearInterval(dlPollTimer);
+      dlPollTimer = null;
+    }
+  }
+
+  function startDownloadPoll() {
+    stopDownloadPoll();
+    dlPollFails = 0;
+    dlPollTimer = setInterval(function () {
+      $.ajax({
+        url: progressUrl,
+        type: 'GET',
+        dataType: 'json',
+        data: { install_id: installId, token: token }
+      }).then(function (data) {
+        if (data && data.ok && data.percent !== null && data.percent !== undefined) {
+          dlPollFails = 0;
+          setActivePercent(data.percent);
+        }
+      }, function () {
+        // 旧代码窗口 / 网络异常：连续 3 次失败即静默停用，回落秒表
+        dlPollFails++;
+        if (dlPollFails >= 3) {
+          stopDownloadPoll();
+        }
+      });
+    }, 1200);
+  }
+
+  function buildNextUrl(next) {
+    if (!next) { return null; }
+    var query = {};
+    var nextType = next.type ? String(next.type) : '';
+    if (nextType !== '' && nextType !== 'system') {
+      query.type = nextType;
+    }
+    var cid = next.cloud_id || '';
+    if (next.batch && next.batch.length) {
+      cid = [cid].concat(next.batch).join('|');
+    }
+    query.cloud_id = cid;
+    if (next.mode) { query.mode = String(next.mode); }
+    if (next.version) { query.version = String(next.version); }
+    if (next.mini_version) { query.mini_version = String(next.mini_version); }
+    if (next.theme_id) { query.theme_id = String(next.theme_id); }
+    return route('admin.cloud.install', {}, { query: query });
+  }
+
+  function runStep(step) {
+    currentStep = step;
+    attachStepSpinner(step);
+    // 下载步骤：并行轮询真实百分比（需有 download_url 且非 local / 离线模式）
+    if (step === 'download'
+      && meta.source !== 'offline'
+      && meta.download_url && String(meta.download_url) !== ''
+      && String(meta.mode || '') !== 'local') {
+      startDownloadPoll();
+    }
+    var payload = { install_id: installId, step: step, token: token };
+    return $.ajax({
+      url: stepUrl,
+      type: 'POST',
+      dataType: 'json',
+      data: payload
+    }).then(function (data) {
+      // 本步请求已返回：停止下载轮询；下载成功时先将该行定格 100% 再进入下一步
+      stopDownloadPoll();
+      if (data && typeof data === 'object' && step === 'download' && data.ok) {
+        setActivePercent(100);
+      }
+      if (!data || typeof data !== 'object') {
+        clearActiveSpinner();
+        showFailure({
+          error: langPack.cloud_install_step_failed_generic
+            || langPack.cloud_install_request_failed
+            || '',
+          network_failed: true
+        });
+        return $.Deferred().reject().promise();
+      }
+      if (data.mode !== undefined && data.mode !== null && String(data.mode) !== '') {
+        meta.mode = String(data.mode);
+      }
+      pushLogs(data.logs || [], data.ok ? 'info' : 'error');
+      // 快照等步骤携带真实进度（0-100 整数，完成态为 100）时更新进行中行
+      if (typeof data.progress === 'number') {
+        setActivePercent(data.progress);
+      }
+      if (!data.ok) {
+        clearActiveSpinner();
+        if (!data.error || String(data.error) === '') {
+          data.error = langPack.cloud_install_step_failed_generic || '';
+        }
+        showFailure(data);
+        return $.Deferred().reject().promise();
+      }
+      if (data.finished) {
+        clearActiveSpinner();
+        // 升级完成即静默强刷角标：批量时当前页角标随之递减，落库后下一模块页 / 返回更新主页首屏即最新
+        if (window.DouUpdateBadge) { window.DouUpdateBadge.refresh(true); }
+        if (data.result && data.result.next_install) {
+          var url = buildNextUrl(data.result.next_install);
+          if (url) {
+            var nextId = data.result.next_install.cloud_id || '';
+            var nextType = data.result.next_install.type || '';
+            var nextMode = data.result.next_install.mode || '';
+            var nextLine;
+            var nextKey;
+            if (nextMode === 'update') {
+              nextKey = nextType === 'theme' ? 'cloud_update_theme'
+                : (nextType === 'plugin' ? 'cloud_update_plugin' : 'cloud_update_next');
+            } else {
+              nextKey = nextType === 'theme' ? 'cloud_install_theme' : 'cloud_install_next';
+            }
+            var nextPrefix = langPack[nextKey] || (nextMode === 'update' ? '即将更新下一个' : '即将安装下一个');
+            nextLine = nextPrefix + '：' + nextId + ' >>>>>>>>>>';
+            appendLog(nextLine);
+            setTimeout(function () { window.location.href = url; }, 800);
+            return;
+          }
+        }
+        showFinishActions(data.result || {});
+        return;
+      }
+      var nextStep = data.next;
+      if (nextStep !== undefined && nextStep !== null && String(nextStep) !== '') {
+        return runStep(String(nextStep));
+      }
+      clearActiveSpinner();
+    }, function (jqXHR, textStatus) {
+      stopDownloadPoll();
+      var parsed = jqXHR && jqXHR.responseJSON ? jqXHR.responseJSON : null;
+      if (parsed && typeof parsed === 'object' && parsed.error) {
+        clearActiveSpinner();
+        showFailure(parsed);
+        return $.Deferred().reject().promise();
+      }
+      var netMsg = langPack.cloud_install_request_failed || '';
+      if (jqXHR && jqXHR.status) {
+        netMsg = netMsg !== '' ? netMsg + ' (HTTP ' + jqXHR.status + ')' : 'HTTP ' + jqXHR.status;
+      }
+      if (textStatus === 'timeout') {
+        netMsg = langPack.cloud_install_request_failed || textStatus;
+      }
+      clearActiveSpinner();
+      showFailure({ error: netMsg, network_failed: true });
+      return $.Deferred().reject().promise();
+    });
+  }
+
+  $(function () {
+    if (steps && steps.length) {
+      seedInitialLogs();
+      runStep(steps[0]);
+    }
+  });
+})(jQuery);

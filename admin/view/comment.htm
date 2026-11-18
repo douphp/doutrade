@@ -1,0 +1,107 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/comment.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div id="comment" class="dou-page">
+   <!-- {if $rec eq 'default'} 评论列表 -->
+   {include file="inc/page_header.tpl"}
+   <div class="list">
+    <form name="del" method="post" action="{url link='admin.comment.del_all'}">
+     <input type="hidden" name="token" value="{$token}" />
+     <table class="table">
+      <tr>
+       <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+       <th class="m-none text-left">{$lang.comment_nickname}</th>
+       <!-- {if $features.user} -->
+       <th class="m-none text-center">{$lang.comment_user_id}</th>
+       <!-- {/if} -->
+       <th class="m-none text-left">{$lang.comment_item_id}</th>
+       <th class="text-left">{$lang.comment_content}</th>
+       <th width="120" class="text-center">{$lang.created_at}</th>
+       <th class="m-none text-center" width="60">{$lang.if_show}</th>
+       <th width="80" class="text-center">{$lang.handler}</th>
+      </tr>
+      <!-- {foreach from=$comment_list item=comment} -->
+      <tr {if $comment.if_read eq '0'}class="unread"{/if}>
+       <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$comment.id}" /></td>
+       <td class="m-none">{$comment.nickname}</td>
+       <!-- {if $features.user} -->
+       <td class="m-none text-center"><!-- {if $comment.user} --><a href="{url link='admin.user.edit' id=$comment.user.id}">{$comment.user.username}</a><!-- {else} -->-<!-- {/if} --></td>
+       <!-- {/if} -->
+       <td class="m-none">{$comment.module_name} <a href="{$comment.item_url}" target="_blank">{$comment.item_name}</a></td>
+       <td> {$comment.content nofilter}
+        <!-- {if $comment.reply.content} -->
+
+        <p class="reply">{$comment.reply.content nofilter}</p>
+
+        <!-- {/if} --></td>
+       <td class="text-center">{$comment.created_at}</td>
+       <td class="m-none text-center">{$comment.if_show}</td>
+       <td class="text-center"><a href="{url link='admin.comment.read' id=$comment.id}">{$lang.view}</a></td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+     <div class="action">
+      <input class="btn" type="submit" value="{$lang.del}" />
+     </div>
+    </form>
+   </div>
+   {include file="inc/pager.tpl"}
+   <!-- {/if} -->
+   <!-- {if $rec eq 'read'} 评论查看与回复 -->
+   {include file="inc/page_header.tpl"}
+   <div class="item">
+    <dl class="user-comment">
+     <dt><a href="javascript:void(0)" onClick="dou_callback('{url link='admin.comment.show_hidden'}', 'id', {$comment.id}, 'if_show')" class="show-hidden" id="if_show"><em class="{if $comment.if_show}d{else}h{/if}"><b>{$lang.display}</b><s>{$lang.hidden}</s></em></a>{$comment.module_name} <a href="{$comment.item_url}">{$comment.item_name}</a></dt>
+     <dd class="content">
+      <div class="comment-star">
+       <!-- {foreach from=$comment.star_box.list item=item} -->
+       <i class="bi-star active"></i>
+       <!-- {/foreach} -->
+       <i class="star-number">{$comment.star_box.number}</i>
+      </div>
+      <p>{$comment.content nofilter}</p>
+      <!-- {foreach from=$comment.img_list item=item} -->
+      <a href="{$item.file}" target="_blank"><img src="{$item.file}" height="80" /></a>
+      <!-- {/foreach} -->
+     </dd>
+     <dd class="reply"><b>{$lang.comment_nickname}：{$comment.nickname}<!-- {if $comment.user} -->（<a href="{url link='admin.user.edit' id=$comment.user.id}">{$comment.user.username}</a>）<!-- {/if} --></b><b>{$lang.created_at}：{$comment.created_at}</b></dd>
+    </dl>
+    <!-- {if $reply.content} -->
+    <dl class="reply">
+     <b>{$lang.comment_admin_reply}[{$reply.created_at}]：</b> {$reply.content nofilter}
+    </dl>
+    <!-- {else} -->
+    <dl class="reply-submit">
+     <form action="{url link='admin.comment.reply'}" method="post">
+      <input type="hidden" name="token" value="{$token}" />
+      <textarea name="content" cols="90" rows="5" class="textarea" id="content"></textarea>
+      <br>
+      <input type="hidden" name="id" value="{$comment.id}">
+      <input class="btn" type="submit" value="{$lang.comment_reply}" />
+     </form>
+    </dl>
+    <!-- {/if} -->
+   </div>
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"} </div>
+</body>
+</html>

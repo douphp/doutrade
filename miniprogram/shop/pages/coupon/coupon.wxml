@@ -1,0 +1,36 @@
+<!--pages/coupon/coupon.wxml-->
+<navbar title="{{title}}" url="/pages/user/user"></navbar>
+<view class="body">
+ <view class="wrap">
+  <view class="page-head">
+   <view class="action"><text class="link" data-url="/pages/coupon/user" bindtap="douNavigateTo">{{lang.coupon_user}}</text></view>
+   <view class="name">{{lang.coupon_center}}</view>
+  </view>
+  <view class="coupon-list">
+   <view class="item-box" wx:for="{{coupon_list}}" wx:for-item="item" wx:key="index">
+    <view class="item">
+     <view class="head">
+      <view class="circle"></view>
+      <image wx:if="{{item.image_url}}" class="coupon-image" src="{{item.image_url}}" mode="aspectFill"></image>
+      <view class="money">{{item.money}}</view>
+      <view class="name">{{item.name}}</view>
+      <view class="time">{{item.start_at}}~{{item.end_at}}</view>
+     </view>
+     <view class="body">
+      <view class="row"><text class="b">{{lang.coupon_condition}} :</text> {{item.condition_text}}</view>
+      <view class="row"><text class="b">{{lang.coupon_brief}} :</text> {{item.brief}}</view>
+      <view class="row"><text class="b">{{lang.coupon_scope_type}} :</text> {{item.scope_text}}</view>
+      <view class="row"><text class="b">{{lang.coupon_remain}} :</text> {{item.remain_text}}</view>
+      <view class="foot">
+       <view class="get-coupon" wx:if="{{item.claimable}}" data-id="{{item.id}}" bindtap="claimCoupon">{{lang.coupon_claim}}</view>
+       <view class="sold-out" wx:elif="{{item.status.value == 'get'}}">{{lang.coupon_sold_out}}</view>
+       <view class="got" wx:else>{{item.status.format}}</view>
+      </view>
+     </view>
+    </view>
+   </view>
+   <view class="loadpage" wx:if="{{loadpage}}">{{lang.loadpage}}</view>
+   <view class="empty" wx:if="{{!coupon_list.length && !loadpage}}">{{lang.coupon_empty}}</view>
+  </view>
+ </view>
+</view>

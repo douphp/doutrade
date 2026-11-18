@@ -1,0 +1,60 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Admin\Model\Order;
+
+use Dou\Core\Orm\Builder;
+use Dou\Core\Orm\Model;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 订单优惠券（order_coupon）后台模型。
+ *
+ * 一单可叠加多张券（多行记录）。
+ * 金额字段保留原值供 Util::formatPrice 展示，不做 int 强转。
+ */
+class OrderCoupon extends Model
+{
+    protected $table = 'order_coupon';
+    protected $primary = 'id';
+
+    /** @var array */
+    protected $casts = array(
+        'id' => 'int',
+        'order_id' => 'int',
+        'coupon_id' => 'int',
+        'coupon_log_id' => 'int',
+        'created_at' => 'datetime:Y-m-d H:i:s',
+    );
+
+    /**
+     * 按订单筛选；$orderId <= 0 透传。
+     *
+     * @param Builder $query
+     * @param mixed $orderId
+     * @return Builder
+     */
+    public function scopeFilterByOrderId(Builder $query, $orderId)
+    {
+        $orderId = (int) $orderId;
+        if ($orderId <= 0) {
+            return $query;
+        }
+
+        return $query->where('order_id', $orderId);
+    }
+}

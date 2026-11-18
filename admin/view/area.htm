@@ -1,0 +1,114 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/area.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div id="area" class="dou-page">
+     <!-- {if $rec eq 'default'} 单页面列表 -->
+     {include file="inc/page_header.tpl"}
+     <div class="tab" data-dou-tab id="area-tabs">
+      {include file="inc/tab_nav.tpl"}
+      <div class="tab-content">
+       <div class="area-tip">{$lang.area_group} · <em>{$area_group_name}</em>{if $single_root} · {$lang.area_group_single}{/if}</div>
+       <div class="list">
+      <!-- {foreach from=$area_list item=country} -->
+      <div class="node lv1{if $country.child} has-child{/if}">
+       <a class="name" href="{url link='admin.area.edit' id=$country.id}">{$country.name}</a>
+       <!-- {if $country.child} -->
+       <div class="child-box">
+        <!-- {foreach from=$country.child item=province} -->
+        <div class="node lv2{if $province.child} has-child{/if}">
+         <a class="name" href="{url link='admin.area.edit' id=$province.id}">{$province.name}</a>
+         <!-- {if $province.child} -->
+         <div class="child-box">
+          <!-- {foreach from=$province.child item=city} -->
+          <div class="node lv3{if $city.child} has-child{/if}">
+           <a class="name" href="{url link='admin.area.edit' id=$city.id}">{$city.name}</a>
+           <!-- {if $city.child} -->
+           <div class="child-box">
+            <!-- {foreach from=$city.child item=district} -->
+            <div class="node lv4">
+             <a class="name" href="{url link='admin.area.edit' id=$district.id}">{$district.name}</a>
+            </div>
+            <!-- {/foreach} -->
+           </div>
+           <!-- {/if} -->
+          </div>
+          <!-- {/foreach} -->
+         </div>
+         <!-- {/if} -->
+        </div>
+        <!-- {/foreach} -->
+       </div>
+       <!-- {/if} -->
+      </div>
+      <!-- {/foreach} -->
+       </div>
+      </div>
+     </div>
+     <!-- {/if} -->
+     <!-- {if $rec eq 'create' || $rec eq 'edit'} 单页面添加或编辑 -->
+     {include file="inc/page_header.tpl"}
+     <form action="{$form_action}" method="post"><input type="hidden" name="_method" value="{$form_method}" />
+      {include file="inc/language_drafts.tpl" drafts=$lang_drafts}
+      <div class="form">
+       <div class="form-item">
+        <div class="form-label">{$lang.area_group}</div>
+        <div class="input-block">
+         <span class="group-name">{$area_group_name}</span>
+         <input type="hidden" name="lang" value="{$area_group}" />
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.area_name}</div>
+        <div class="input-block">
+         <input type="text" name="name" value="{$area.name}" size="40" class="input" />
+         <span class="action" data-field="area_name">{$btn_lang.area_name nofilter}</span>
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.parent}</div>
+        <div class="input-block">
+         <select class="select" name="parent_id">
+          <option value="0">{$lang.empty}</option>
+          <!-- {foreach from=$area_list item=list} -->
+          <option value="{$list.id}"{if $list.id eq $area.parent_id} selected="selected"{/if}>{$list.mark} {$list.name}</option>
+          <!-- {/foreach} -->
+         </select>
+        </div>
+       </div>
+       <div class="form-item">
+        <div class="form-label">{$lang.sort}</div>
+        <div class="input-block">
+         <input type="text" name="sort" value="{if $area.sort}{$area.sort}{else}50{/if}" size="5" class="input" />
+        </div>
+       </div>
+       <div class="form-item">
+        <input type="hidden" name="token" value="{$token}" />
+        <input type="hidden" name="id" value="{$area.id}">
+        <input class="btn" type="submit" value="{$lang.btn_submit}" />
+       </div>
+      </div>
+     </form>
+     <!-- {/if} -->
+    </div>
+
+  </div>
+ </div>
+ {include file="inc/footer.tpl"} </div>
+</body>
+</html>

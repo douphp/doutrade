@@ -1,0 +1,56 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+<link href="css/email.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div class="dou-page">
+   <!-- {if $rec eq 'default'} 邮件订阅列表 -->
+   {include file="inc/page_header.tpl"}
+   <div id="list">
+    <form name="del" method="post" action="{url link='admin.email.del_all'}">
+     <input type="hidden" name="token" value="{$token}">
+     <table class="table">
+      <tr>
+       <th width="22" class="text-center"><input name='chkall' type='checkbox' id='chkall' onclick='selectcheckbox(this.form)' value='check'></th>
+       <th class="text-left">{$lang.email_email}</th>
+       <th class="m-none text-center">{$lang.email_ip}</th>
+       <th class="text-center">{$lang.created_at}</th>
+       <th class="text-center">{$lang.email_status}</th>
+      </tr>
+      <!-- {foreach from=$email_list item=email} -->
+      <tr {if $email.status.value eq '0'}class="unread"{/if}>
+       <td class="text-center"><input type="checkbox" name="checkbox[]" value="{$email.id}" /></td>
+       <td><a href="{url link='admin.email.check' id=$email.id}" class="js-post">{$email.email}</a></td>
+       <td class="m-none text-center">{$email.ip}</td>
+       <td class="text-center">{$email.created_at}</td>
+       <td class="text-center">{$email.status.format}</td>
+      </tr>
+      <!-- {/foreach} -->
+     </table>
+     <div class="action">
+      <input class="btn" type="submit" value="{$lang.del}" />
+     </div>
+    </form>
+   </div>
+   {include file="inc/pager.tpl"}
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"} </div>
+</body>
+</html>

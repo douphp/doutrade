@@ -1,0 +1,90 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main has-submenu">
+   {include file="inc/submenu.tpl"}
+   <div class="dou-page">
+     {include file="inc/page_header.tpl"}
+     <div class="filter">
+      <form action="{url link='admin.user.log'}" method="get" onsubmit="return hideEmpty(this)">
+       {if $req.user_id}<input type="hidden" name="user_id" value="{$req.user_id}">{/if}
+       <input name="username" type="text" class="input" value="{$req.username}" size="25" placeholder="{$lang.user_search_placeholder}" />
+       <select class="select" name="action">
+        <option value="">{$lang.user_log_action}</option>
+        <!-- {foreach from=$action_list item=opt} -->
+        <option value="{$opt.value}"{if $opt.cur} selected="selected"{/if}>{$opt.value}</option>
+        <!-- {/foreach} -->
+       </select>
+       <input name="ip" type="text" class="input" value="{$req.ip}" placeholder="{$lang.user_log_ip}" size="15" />
+       <script type="text/javascript" src="js/laydate/laydate.js"></script>
+       <input type="text" id="date_start" name="date_start" value="{$req.date_start}" class="input" placeholder="{$lang.time_start}" autocomplete="off" size="12" />
+       <input type="text" id="date_end" name="date_end" value="{$req.date_end}" class="input" placeholder="{$lang.time_end}" autocomplete="off" size="12" />
+       <script>
+       {literal}
+       laydate.render({
+         elem: '#date_start',
+         type: 'date'
+       });
+       laydate.render({
+         elem: '#date_end',
+         type: 'date'
+       });
+       {/literal}
+       </script>
+       <input class="btn-secondary" type="submit" value="{$lang.btn_filter}" />
+       <a class="btn-secondary" href="{url link='admin.user.log'}">{$lang.btn_reset}</a>
+      </form>
+     </div>
+     <div id="list">
+       <table class="table">
+        <tr>
+         <th class="m-none text-center" width="60">{$lang.record_id}</th>
+         <th class="text-left">{$lang.user_account}</th>
+         <th class="text-center">{$lang.user_log_action}</th>
+         <th class="text-center">{$lang.user_log_ip}</th>
+         <th class="text-center">{$lang.user_log_time}</th>
+         <th class="text-center">{$lang.user_log_result}</th>
+         <th class="text-left">{$lang.user_log_details}</th>
+        </tr>
+        <!-- {foreach from=$log_list item=log} -->
+        <tr>
+         <td class="m-none text-center">{$log.id}</td>
+         <td>
+          <!-- {if $log.user.id} -->
+          <a href="{url link='admin.user.edit' id=$log.user.id}">{$log.user.username}</a>
+          <!-- {else} -->
+          {$log.user.username}
+          <!-- {/if} -->
+         </td>
+         <td class="text-center">{$log.action}</td>
+         <td class="text-center">{$log.ip}</td>
+         <td class="text-center">{$log.created_at}</td>
+         <td class="text-center">{$log.result_format}</td>
+         <td>{$log.details}</td>
+        </tr>
+        <!-- {/foreach} -->
+       </table>
+     </div>
+     {include file="inc/pager.tpl"}
+    </div>
+
+  </div>
+ </div>
+ {include file="inc/footer.tpl"} </div>
+</body>
+</html>
+

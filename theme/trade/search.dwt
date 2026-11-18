@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="keywords" content="{$keywords}" />
+<meta name="description" content="{$description}" />
+<meta name="generator" content="{$generator}" />
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$page_title}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+<link href="css/style.css" rel="stylesheet" type="text/css" />
+{include file="inc/code_head.tpl"}
+</head>
+<body>
+<div id="wrapper"> {include file="inc/header.tpl"}
+ <div id="product-category" class="container mb">
+  <div class="cat-name">{$search_results nofilter}</div>
+  <div class="sort-count">
+   <div class="sort">
+    {$lang.sort}: 
+    <!-- {foreach from=$sort_list item=item} --> 
+    <a{if $item.active} class="active"{/if} href="{$item.url}">{$item.name}<!-- {if $item.icon} --><i class="bi bi-chevron-{$item.icon}"></i><!-- {/if} --></a> 
+    <!-- {/foreach} --> 
+   </div>
+   <div class="count">
+    {$lang.pager_1} {$pager.record_count} {$lang.pager_2}，{$lang.pager_3} {$pager.page_count} {$lang.pager_4}，{$lang.pager_5} {$pager.page} {$lang.pager_4}
+   </div>
+  </div>
+  <div class="product-list">
+   <div class="row"> 
+    <!-- {foreach from=$search_list item=product} -->
+    <div class="col-md-3 col-6">
+     <div class="item">
+      <!-- {if $product.image_other} -->
+      <div class="img multi"><a href="{$product.url}"><img class="main" src="{$product.thumb}" /><img class="other" src="{$product.image_other}" /></a></div>
+      <!-- {else} -->
+      <div class="img"><a href="{$product.url}"><img class="main" src="{$product.thumb}" /></a></div>
+      <!-- {/if} -->
+      <div class="name"><a href="{$product.url}">{$product.name nofilter}</a></div>
+      <!-- {if $site.show_price} -->
+      <div class="price-box"><em class="price">{$product.price}</em></div>
+      <!-- {/if} -->
+     </div>
+    </div>
+    <!-- {/foreach} --> 
+   </div>
+  </div>
+  {include file="inc/pager.tpl"} </div>
+ {include file="inc/online_service.tpl"}
+ {include file="inc/footer.tpl"} </div>
+{include file="inc/code_footer.tpl"}
+<script type="text/javascript" src="js/bootstrap.min.js"></script>
+<script type="text/javascript" src="js/dou.js"></script> 
+<script type="text/javascript" src="js/online_service.js"></script>
+</body>
+</html>

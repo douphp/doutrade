@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="keywords" content="{$keywords}" />
+ <meta name="description" content="{$description}" />
+ <meta name="generator" content="{$generator}" />
+ <meta name="csrf-token" content="{$csrf_token}">
+ <title>{$page_title}</title>
+ <link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+ <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+ <link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css" />
+ <link href="css/common.css" rel="stylesheet" type="text/css" />
+ <link href="css/style.css" rel="stylesheet" type="text/css" />
+ <link href="css/coupon.css" rel="stylesheet" type="text/css" />
+ {include file="inc/code_head.tpl"}
+</head>
+
+<body>
+ <div id="wrapper"> {include file="inc/header.tpl"}
+  <div class="container mb">
+   <div class="coupon-center">
+    <div class="coupon-center-head">
+     <h1>{$lang.coupon_center}</h1>
+     <a class="more" href="{url link='coupon.user'}">{$lang.coupon_user}<i class="bi bi-arrow-right"></i></a>
+    </div>
+    <div class="coupon-list">
+     <!-- {foreach from=$coupon_list item=coupon} -->
+     <div class="item-box">
+      <div class="item{if $coupon.status.value neq 'get'} gray{/if}">
+       <div class="head">
+        <div class="circle"></div>
+        <!-- {if $coupon.image_url} -->
+        <div class="coupon-image"><img src="{$coupon.image_url}" alt="{$coupon.name}" /></div>
+        <!-- {/if} -->
+        <div class="money">{$coupon.money}</div>
+        <div class="name">{$coupon.name}</div>
+        <div class="time">{$coupon.start_at}~{$coupon.end_at}</div>
+       </div>
+       <div class="body">
+        <div class="row"><b>{$lang.coupon_condition} :</b> {$coupon.condition_text}</div>
+        <div class="row"><b>{$lang.coupon_brief} :</b> {$coupon.brief}</div>
+        <div class="row"><b>{$lang.coupon_scope_type} :</b> {$coupon.scope_text}</div>
+        <div class="row"><b>{$lang.coupon_remain} :</b> {$coupon.remain_text}</div>
+        <div class="foot">
+         <!-- {if $coupon.status.value eq 'get' && $coupon.claimable} -->
+         <span class="get-coupon" data-id="{$coupon.id}"><em class="t">{$coupon.status.format}</em></span>
+         <!-- {elseif $coupon.status.value eq 'get'} -->
+         <span class="sold-out">{$lang.coupon_sold_out}</span>
+         <!-- {else} -->
+         <span class="got">{$coupon.status.format}</span>
+         <!-- {/if} -->
+        </div>
+       </div>
+      </div>
+     </div>
+     <!-- {/foreach} -->
+    </div>
+    <!-- {if !$coupon_list} -->
+    <div class="empty-list">{$lang.coupon_empty}</div>
+    <!-- {/if} -->
+    {include file="inc/pager.tpl"}
+   </div>
+  </div>
+  {include file="inc/online_service.tpl"}
+  {include file="inc/footer.tpl"}
+ </div>
+ {include file="inc/code_footer.tpl"}
+ <script type="text/javascript" src="js/bootstrap.min.js"></script>
+ <script type="text/javascript" src="js/dou.js"></script>
+ <script type="text/javascript" src="js/online_service.js"></script>
+</body>
+
+</html>

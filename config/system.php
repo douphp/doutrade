@@ -1,0 +1,51 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+/**
+ * 系统恒定常量（区别于 config/module.php 的"用户可调模块账本"）。
+ *
+ * 本文件承载框架层固定的模块短名清单，不随模块安装/卸载改写，由
+ * {@see \Dou\Core\Service\System\SystemConstantsReader} 读取后灌入 Config 的
+ * `system.*` 命名空间（与 `setting.*` 的模块账本分离）。
+ */
+
+return [
+    // 前台路由层固定内建模块（不依赖 module.all_module 的启用判定），仅服务前台路由判定，
+    // 含 captcha/sitemap/llms 这些非小程序端点
+    'front_fixed_module' => ['index', 'page', 'search', 'captcha', 'sitemap', 'llms'],
+
+    // 小程序内建模块（始终注册进 app.json，且对应模块需有 API 控制器）。
+    // 与 front_fixed_module 完全独立：小程序无 captcha/sitemap/llms 页面
+    'miniprogram_builtin_module' => ['index', 'page', 'search'],
+
+    // 前台保留 URL 首段（不可被模块短名占用）
+    'reserved_first_segment' => ['llms', 'sitemap', 'captcha', 'search', 'category', 'index', 'plugin'],
+
+    // 小程序专属页（无对应业务模块，直接登记进 app.json）
+    'miniprogram_extra_page' => ['pages/debug/debug'],
+
+    // 不参与小程序 app.json 生成的 single 模块（系统型 / 容器型，无小程序页面）
+    'miniprogram_no_handle' => ['plugin', 'language', 'weixin', 'attribute', 'email'],
+
+    // 不进前台主导航目标下拉的 single 模块（系统型 / 容器型，无前台分类入口）
+    // sms：仅后台短信配置，无前台页面与路由，不得作为导航跳转目标
+    'nav_hidden_single' => ['plugin', 'language', 'sms'],
+
+    // 后台菜单 / 工作台 / 首页统计隐藏的系统级 single 模块
+    'admin_hidden_single' => ['language'],
+
+    // 后台自定义模板开关：空数组=关闭；写入槽位名则启用对应 admin/view/<槽位>.custom.htm（需自行创建该文件）。
+    // 可选槽位：header / sidebar / toolbar / index（如 ['sidebar'] 用 sidebar.custom.htm 覆盖内置侧栏）
+    'admin_theme_custom' => [],
+];

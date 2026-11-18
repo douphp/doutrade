@@ -1,0 +1,27 @@
+{
+    "logo_img": {
+        "width": 55,
+        "height": 55,
+        "note": "宽度55~200、高度55"
+    },
+    "banner_img": {
+        "width": 1920,
+        "height": 400,
+        "note": "宽度>=1920、高度400"
+    },
+    "product_img": {
+        "width": 1000,
+        "height": 1000,
+        "note": "上传图片尺寸推荐为1000*1000，不建议上传过大图片，以免影响访问速度"
+    },
+    "product_thumb": {
+        "width": 300,
+        "height": 300,
+        "note": "300*300"
+    },
+    "article_img": {
+        "width": 750,
+        "height": 500,
+        "note": "上传图片尺寸推荐为750*500，不建议上传过大图片，以免影响访问速度"
+    }
+}

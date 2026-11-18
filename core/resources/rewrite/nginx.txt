@@ -1,0 +1,54 @@
+# DouPHP 伪静态规则：将以下规则合并到站点 server 块中（一般放在 PHP 配置段之前）。
+# 若已有 location /，请合并内容而不是重复添加，避免 nginx 报 duplicate location。
+# 注意：server 块须有包含 index.php 的 index 指令（如 index index.php index.html;），
+# 否则真实目录（如 doubak/）无法命中目录索引。
+
+# 安全拦截：运行时临时文件禁止访问，images 目录禁止执行脚本（含 x.php.jpg 变体）
+# server 阶段直接返回 403，先于 location 匹配执行，与配置顺序无关
+if ($uri ~* ^/storage/tmp(/|$)) {
+    return 403;
+}
+if ($uri ~* ^/images/.*\.(php[0-9]?|phtml|phar|pht|cgi|pl|py|asp|aspx|jsp|shtml)($|\.)) {
+    return 403;
+}
+
+location / {
+    # 真实目录缺尾斜杠时 301 补上，避免目录内相对路径资源错乱
+    if (-d $request_filename) {
+        rewrite ^(.*[^/])$ $1/ permanent;
+    }
+    # $uri/ 让真实目录走目录索引，而不是落进伪静态兜底
+    try_files $uri $uri/ @rewrites;
+}
+
+# admin/service 与物理目录同名，须优先路由到后台入口（放在 location / 之后、@rewrites 兜底之前）
+location = /admin/service {
+    rewrite ^ /admin/index.php?route=service last;
+}
+location ^~ /admin/service/ {
+    rewrite ^/admin/service/(.+)$ /admin/index.php?route=service/$1 last;
+    rewrite ^ /admin/index.php?route=service last;
+}
+
+location @rewrites {
+    if ($uri ~ \.php$) {
+        return 404;
+    }
+
+    # 静态入口
+    rewrite ^/index\.html$  /index.php last;
+
+    # API
+    rewrite ^/api/(.+)$ /api/index.php?route=$1 last;
+    rewrite ^/api/?$    /api/index.php last;
+
+    # 后台
+    rewrite ^/admin/(.+)$ /admin/index.php?route=$1 last;
+    rewrite ^/admin/?$    /admin/index.php last;
+
+    # 前台
+    rewrite ^/(.+)$ /index.php?route=$1 last;
+    rewrite ^/?$    /index.php last;
+
+    return 404;
+}

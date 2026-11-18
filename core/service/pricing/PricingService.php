@@ -1,0 +1,263 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+namespace Dou\Core\Service\Pricing;
+
+use Dou\Core\Facade\DB;
+use Dou\Core\Foundation\Configuration\Config;
+use Dou\Core\Service\BaseService;
+use Dou\Core\Support\Util;
+
+if (!defined('IN_DOUCO')) {
+    die('Hacking attempt');
+}
+
+/**
+ * 定价服务（促销价 / 会员价 / 原价）。
+ *
+ * 「auth 只属于 shell 层」原则下：本类**不**调 auth()，shell 必须显式传入
+ * `$userId`；user_level 由本类内部按 $userId 查询并以请求级缓存复用，避免
+ * 在调用面散布等级数据传递逻辑。
+ */
+class PricingService extends BaseService
+{
+    /**
+     * 请求级 user_id → user_level 行缓存（id=0 → null）。
+     *
+     * @var array<int, array|null>
+     */
+    private $userLevelCache = array();
+
+    /**
+     * 处理等级价数组并序列化。
+     *
+     * @param mixed $levelPricePost
+     * @return string
+     */
+    public function levelPrice($levelPricePost)
+    {
+        if (isset($levelPricePost) && !empty($levelPricePost)) {
+            foreach ($levelPricePost as $value) {
+                if (empty($value)) {
+                    return '';
+                }
+            }
+        } else {
+            return '';
+        }
+
+        return serialize($levelPricePost);
+    }
+
+    /**
+     * 计算销售价格结构。
+     *
+     * shell 通过 `auth($shell)->id()` 取得用户 ID 后显式传入；user_level 由本类
+     * 内部按 $userId 查询并按请求级缓存复用。
+     *
+     * @param string $module
+     * @param int $itemId
+     * @param int $userId 未登录或不需会员价时传 0
+     * @param array|null $itemData 已含 price/level_price/promote_price 字段的预取行，省去再查
+     * @return array
+     */
+    public function salePrice($module, $itemId, $userId = 0, $itemData = null)
+    {
+        $excludeModule = array('money_package', 'aigc_package');
+
+        if ($itemData !== null && isset($itemData['price']) && isset($itemData['level_price']) && isset($itemData['promote_price'])) {
+            $item = $itemData;
+        } else {
+            $fields = array('price');
+            $hasLevelPrice = DB::fieldExist($module, 'level_price');
+            $hasPromotePrice = DB::fieldExist($module, 'promote_price');
+
+            if ($hasLevelPrice) {
+                $fields[] = 'level_price';
+            }
+            if ($hasPromotePrice) {
+                $fields[] = 'promote_price';
+            }
+            if (DB::fieldExist($module, 'promote_start_at')) {
+                $fields[] = 'promote_start_at';
+            }
+            if (DB::fieldExist($module, 'promote_end_at')) {
+                $fields[] = 'promote_end_at';
+            }
+
+            $item = DB::table($module)
+                ->field(implode(', ', $fields))
+                ->where('id', intval($itemId))
+                ->find();
+
+            if (!is_array($item)) {
+                $item = array();
+            }
+            if (!isset($item['price'])) {
+                $item['price'] = 0;
+            }
+            if (!isset($item['level_price'])) {
+                $item['level_price'] = '';
+            }
+            if (!isset($item['promote_price'])) {
+                $item['promote_price'] = 0;
+            }
+            if (!isset($item['promote_start_at'])) {
+                $item['promote_start_at'] = null;
+            }
+            if (!isset($item['promote_end_at'])) {
+                $item['promote_end_at'] = null;
+            }
+        }
+
+        $salePrice = array(
+            'value' => $item['price'],
+            'format' => Util::formatPrice($item['price']),
+            'type' => 'original',
+            'name' => '',
+        );
+
+        // VIP 套餐：只支持促销价（含时间窗），不叠加会员等级价。
+        if ($module === 'vip_package') {
+            if ($this->isVipPromotionActive($item)) {
+                return array(
+                    'value' => $item['promote_price'],
+                    'format' => Util::formatPrice($item['promote_price']),
+                    'type' => 'promote',
+                    'name' => lang('price_promote'),
+                );
+            }
+
+            return $salePrice;
+        }
+
+        if (in_array($module, $excludeModule)) {
+            return $salePrice;
+        }
+
+        // 用户可见成交价取「原价 / 促销价 / 会员价」中的最低值：
+        // 促销价不高于原价才生效；会员价低于促销价时按会员价，避免会员反而多付。
+        $bestPrice = $salePrice;
+        if ($item['promote_price'] > 0) {
+            $promotePrice = array(
+                'value' => $item['promote_price'],
+                'format' => Util::formatPrice($item['promote_price']),
+                'type' => 'promote',
+                'name' => lang('price_promote'),
+            );
+            if ((float) $promotePrice['value'] < (float) $bestPrice['value']) {
+                $bestPrice = $promotePrice;
+            }
+        }
+
+        $userId = (int) $userId;
+        if ($userId <= 0 || !Config::get('features.user', false) || !DB::tableExist('user_level')) {
+            return $bestPrice;
+        }
+
+        $userLevel = $this->resolveUserLevel($userId);
+        if (!is_array($userLevel) || empty($userLevel['id'])) {
+            return $bestPrice;
+        }
+
+        $levelPrice = null;
+        $levelId = $userLevel['id'];
+        if ($item['level_price']) {
+            $levelPriceMap = unserialize($item['level_price']);
+            if (is_array($levelPriceMap)
+                && isset($levelPriceMap[$levelId])
+                && (string) $levelPriceMap[$levelId] !== ''
+            ) {
+                $levelPrice = array(
+                    'value' => $levelPriceMap[$levelId],
+                    'format' => Util::formatPrice($levelPriceMap[$levelId]),
+                    'type' => 'level',
+                    'name' => lang('price_level'),
+                );
+            }
+        }
+
+        if ($levelPrice === null) {
+            $discounted = number_format(
+                $item['price'] * ($userLevel['good_discount'] / 100),
+                currency()->baseDecimals(),
+                '.',
+                ''
+            );
+            $levelPrice = array(
+                'value' => $discounted,
+                'format' => Util::formatPrice($discounted),
+                'type' => 'level',
+                'name' => lang('price_level'),
+            );
+        }
+
+        if ((float) $levelPrice['value'] < (float) $bestPrice['value']) {
+            $bestPrice = $levelPrice;
+        }
+
+        return $bestPrice;
+    }
+
+    /**
+     * VIP 套餐促销是否生效：只认促销价 + 时间窗，不叠加等级价。
+     *
+     * 促销价必须低于原价；原价 <= 0（免费套餐）不参与促销；空时间窗视为不限。
+     *
+     * @param array $item
+     * @return bool
+     */
+    private function isVipPromotionActive(array $item)
+    {
+        $price = isset($item['price']) ? (float) $item['price'] : 0;
+        $promotePrice = isset($item['promote_price']) ? (float) $item['promote_price'] : 0;
+        if ($price <= 0 || $promotePrice <= 0 || $promotePrice >= $price) {
+            return false;
+        }
+
+        $now = time();
+        $startTs = Util::toTimestamp(isset($item['promote_start_at']) ? $item['promote_start_at'] : null);
+        $endTs = Util::toTimestamp(isset($item['promote_end_at']) ? $item['promote_end_at'] : null);
+        if ($startTs !== null && $startTs > $now) {
+            return false;
+        }
+        if ($endTs !== null && $endTs <= $now) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 请求级缓存：按 $userId 查询会员等级行（level_id + good_discount）。
+     *
+     * @param int $userId
+     * @return array|null
+     */
+    private function resolveUserLevel($userId)
+    {
+        $userId = (int) $userId;
+        if (array_key_exists($userId, $this->userLevelCache)) {
+            return $this->userLevelCache[$userId];
+        }
+
+        $levelId = DB::table('user')->where('id', $userId)->value('level_id');
+        $userLevel = $levelId
+            ? DB::table('user_level')->field('id, good_discount')->where('id', intval($levelId))->find()
+            : null;
+
+        $this->userLevelCache[$userId] = is_array($userLevel) ? $userLevel : null;
+        return $this->userLevelCache[$userId];
+    }
+}

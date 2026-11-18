@@ -1,0 +1,220 @@
+<?php
+
+/**
+ * DouPHP®
+ * ------------------------------------------------------------------------------------
+ * Copyright (c) 2013-2026 漳州豆壳网络科技有限公司 (DouCo® Co.,Ltd.)
+ *
+ * 本软件基于 MIT 协议开源发布，完整协议文本见项目根目录 LICENSE 文件。
+ * 网站地址：http://www.douphp.com
+ * ------------------------------------------------------------------------------------
+ * Author: DouCo Co.,Ltd.
+ * Release Date: 2026-09-08
+ */
+
+// 云服务
+$_LANG['cloud'] = '云服务';
+$_LANG['cloud_buy_vip'] = '开通VIP会员';
+$_LANG['cloud_admin_home'] = '返回管理中心';
+$_LANG['cloud_handle'] = '在线安装';
+$_LANG['cloud_update_home'] = '返回更新主页';
+$_LANG['cloud_module'] = '模块';
+$_LANG['cloud_module_home'] = '返回模块管理中心';
+$_LANG['cloud_module_enter'] = '进入模块';
+$_LANG['cloud_plugin'] = '插件';
+$_LANG['cloud_plugin_enable'] = '启用插件';
+$_LANG['cloud_plugin_home'] = '返回插件管理中心';
+$_LANG['cloud_theme'] = '模板';
+$_LANG['cloud_theme_enable'] = '启用模板';
+$_LANG['cloud_theme_home'] = '返回模板管理中心';
+$_LANG['cloud_mobile_theme_home'] = '返回手机版模板管理';
+$_LANG['cloud_miniprogram'] = '小程序';
+$_LANG['cloud_miniprogram_home'] = '返回小程序管理中心';
+$_LANG['cloud_system'] = '系统';
+$_LANG['cloud_handle_success'] = '成功安装';
+$_LANG['cloud_title_install'] = '正在安装';
+$_LANG['cloud_title_install_for_theme'] = '正在安装模板 d% 所需的';
+$_LANG['cloud_title_update'] = '正在更新';
+$_LANG['cloud_order'] = '购买';
+$_LANG['cloud_order_submit'] = '提交订单';
+
+// 提示信息
+$_LANG['cloud_frame_cue'] = '这个功能需要 iframe 的支持。您可能禁止了 iframe 的显示，或您的浏览器不支持此功能。';
+$_LANG['cloud_pay_fail'] = '付款失败';
+$_LANG['cloud_pay_success'] = '付款成功';
+$_LANG['cloud_closed'] = '系统已关闭在线升级功能，请先开启！';
+$_LANG['cloud_connect_failed'] = '无法连接云服务，请稍后重试或检查云服务地址配置。';
+$_LANG['cloud_api_base_missing'] = '未配置云服务接口地址，无法使用在线安装等功能。';
+
+// 解压缩
+$_LANG['cloud_unzip_ing'] = '正在解压缩安装包…';
+$_LANG['cloud_unzip_wrong'] = '压缩包解压失败';
+$_LANG['cloud_writeable_denied'] = '以下目录没有写入权限：%s。安装/升级需要写入全站关键目录，请将站点根目录及其全部子目录设置为可写（Linux 下可递归 chmod 777）后重试；安装完成后建议收回 config/ 目录的写权限。';
+$_LANG['cloud_unzip_missing'] = '未找到已下载的安装包文件，请关闭本页后重新发起安装或更新。';
+
+// 下载
+$_LANG['cloud_down_ing_0'] = '正在从 ';
+$_LANG['cloud_down_ing_1'] = ' 下载安装包…';
+$_LANG['cloud_down_wrong'] = '下载失败';
+$_LANG['cloud_local_zip_missing'] = '未在 cache 目录找到本地安装包，请将模块压缩包（与模块标识同名的 .zip）放到 cache 后再试。';
+$_LANG['cloud_down_upstream_not_found'] = '云端未找到该安装包（可能版本或编号不存在），请确认后再试。';
+$_LANG['cloud_down_upstream_unavailable'] = '下载服务暂时不可用或上游镜像无法访问，请稍后再试。';
+$_LANG['cloud_down_upstream_misconfigured'] = '云端下载服务未正确配置上游地址，请联系管理员。';
+$_LANG['cloud_down_login_required'] = '当前云账号没有该资源的下载权限。';
+$_LANG['cloud_down_invalid_package'] = '下载内容不是有效的安装包（未获得该资源权限或资源不存在），请确认后重试。';
+$_LANG['cloud_down_truncated'] = '安装包下载不完整（传输中断或已损坏），已自动重试仍未成功，请稍后重试或检查网络/下载服务。';
+$_LANG['cloud_package_hash_mismatch'] = '安装包完整性校验未通过（下载文件与云端 sha256 不一致），已删除并中止本次安装，请重试或检查下载链路。';
+$_LANG['cloud_package_hash_ok'] = '安装包完整性校验通过。';
+$_LANG['cloud_package_hash_skipped'] = '云端未下发 sha256，跳过完整性校验。';
+
+// 安装
+$_LANG['cloud_install_ing'] = '正在安装 ';
+$_LANG['cloud_install_0'] = '安装 ';
+$_LANG['cloud_install_1'] = ' 成功';
+$_LANG['cloud_install_next'] = '即将安装下一个模块';
+$_LANG['cloud_install_theme'] = '即将安装模板';
+$_LANG['cloud_below_mini_version_support'] = '您的系统版本过低，请升级后重新安装！';
+$_LANG['cloud_install_repeat'] = '已经存在，不要重复安装';
+$_LANG['cloud_theme_logo_kept'] = '已保留模板 Logo 图片：d%（升级不覆盖站点自定义 Logo）';
+$_LANG['cloud_sql_repeat'] = '数据表已经存在于数据库中，不要重复安装';
+$_LANG['cloud_sql_wrong'] = '数据库无法导入、';
+$_LANG['cloud_systemfile_wrong'] = '无法修改系统配置文件';
+$_LANG['cloud_files_wrong'] = '文件拷贝失败：d%（请检查目录写入权限后重试）';
+$_LANG['cloud_files_wrong_count'] = '共 d% 个文件拷贝失败（仅展示前 10 条，详见服务器错误日志）';
+
+// 模块 manifest / 版本来源（模块版本链接化）
+$_LANG['cloud_module_version_missing'] = '缺少模块版本信息，请从官网后台重新获取安装/升级链接';
+$_LANG['cloud_module_manifest_missing'] = '模块包缺少 _action/manifest.php，请重新打包';
+$_LANG['cloud_module_mini_version_missing_log'] = '未提供最低系统版本，跳过版本门槛校验';
+
+// 扩展初始化物料（_action/resources）
+$_LANG['cloud_theme_init_deprecated'] = '该模板包仍使用旧版 _init 初始化目录，演示数据已跳过；请重新打包为 _action/resources（images + sql）。';
+
+// 在线安装多步流程（cloud/install）
+$_LANG['cloud_install_retry'] = '重新安装';
+$_LANG['cloud_install_session_missing'] = '安装会话已过期或不存在，请返回安装入口重新发起';
+$_LANG['cloud_install_request_failed'] = '安装步骤请求失败（网络中断、超时或服务端返回了非 JSON）。解压大包时若较慢，请在服务器上适当提高 max_execution_time 与可用内存。';
+$_LANG['cloud_install_step_failed_generic'] = '安装步骤失败，请稍后重试或查看服务器与 PHP 错误日志。';
+$_LANG['cloud_install_offline_btn'] = '离线升级';
+$_LANG['cloud_install_offline_hint'] = '如果在线升级反复失败或超时，可改用离线升级：手动把安装包放到服务器目录后继续。';
+
+// 离线升级（cloud/offline，仅核心程序包）
+$_LANG['cloud_offline'] = '离线升级';
+$_LANG['cloud_offline_current_version'] = '当前版本';
+$_LANG['cloud_offline_step_download'] = '获取升级包';
+$_LANG['cloud_offline_step_place'] = '放置升级包';
+$_LANG['cloud_offline_step_start'] = '开始升级';
+$_LANG['cloud_offline_download_btn'] = '下载升级包';
+$_LANG['cloud_offline_download_missing'] = '未提供升级包下载地址，请自行到官网获取对应版本的升级包。';
+$_LANG['cloud_offline_official'] = '前往官网';
+$_LANG['cloud_offline_dir_label'] = '放置目录（站点内相对路径）';
+$_LANG['cloud_offline_name_hint'] = '文件名随意：包名（去掉 .zip）就是升级标识；必须是官方核心升级包（压缩包内含 _update/version.php）。';
+$_LANG['cloud_offline_copy'] = '复制';
+$_LANG['cloud_offline_copy_ok'] = '已复制';
+$_LANG['cloud_offline_refresh'] = '刷新检测';
+$_LANG['cloud_offline_empty'] = '目标目录内还没有升级包，上传后点击「刷新检测」。';
+$_LANG['cloud_offline_col_package'] = '升级包';
+$_LANG['cloud_offline_col_status'] = '状态';
+$_LANG['cloud_offline_pkg_version'] = '包内版本';
+$_LANG['cloud_offline_version_newer'] = '可升级';
+$_LANG['cloud_offline_version_same'] = '与当前版本相同（可用于重跑失败的升级）';
+$_LANG['cloud_offline_version_older'] = '低于当前版本，已禁止降级';
+$_LANG['cloud_offline_version_unknown'] = '无法识别包内版本，未校验降级';
+$_LANG['cloud_offline_not_core'] = '非核心升级包，不可用于本页';
+$_LANG['cloud_offline_invalid_zip'] = '不是有效的 ZIP（可能上传未完成或已损坏）';
+$_LANG['cloud_offline_start'] = '开始升级';
+$_LANG['cloud_offline_step_verify'] = '正在校验本地安装包…';
+$_LANG['cloud_offline_skip_auth'] = '离线模式：使用本地升级包，跳过云端授权校验。';
+$_LANG['cloud_offline_zip_missing'] = '未找到本地升级包，请把 zip 放到 storage/install/package/ 后再试。';
+$_LANG['cloud_offline_not_core_package'] = '该压缩包不是核心升级包（缺少 _update/version.php），已中止。';
+$_LANG['cloud_offline_downgrade_blocked'] = '目标版本（%s）低于当前版本（%s），已拒绝降级。';
+$_LANG['cloud_offline_version_same_log'] = '目标版本与当前版本相同，将按重跑处理。';
+
+// 在线安装权限矩阵（与 download/install-resolve 的 auth_status 对齐）
+$_LANG['cloud_install_login_required'] = '请先设置云账号后再下载安装。';
+$_LANG['cloud_install_login_cloud_account'] = '设置云账号';
+$_LANG['cloud_install_not_purchased'] = '该付费扩展尚未购买，请先购买后再安装。';
+$_LANG['cloud_install_buy_extend'] = '购买扩展';
+$_LANG['cloud_install_vip_required'] = '该扩展为 VIP 专享，您当前没有 VIP，请先购买 VIP。';
+$_LANG['cloud_install_buy_vip'] = '购买 VIP';
+$_LANG['cloud_install_vip_expired'] = '您的 VIP 已过期，请续费后再安装 VIP 专享扩展。';
+$_LANG['cloud_install_renew_vip'] = '续费 VIP';
+$_LANG['cloud_install_resolve_unavailable'] = '云服务暂不可用，请稍后重试。';
+
+// 升级
+$_LANG['cloud_update'] = '系统更新';
+$_LANG['cloud_update_0'] = '更新 ';
+$_LANG['cloud_update_next'] = '即将更新下一个模块';
+$_LANG['cloud_update_theme'] = '即将更新下一个模板';
+$_LANG['cloud_update_plugin'] = '即将更新下一个插件';
+$_LANG['cloud_close_update'] = '关闭升级提示';
+$_LANG['cloud_close_update_confirm'] = '关闭后将隐藏升级提醒、侧栏更新角标与升级还原点入口，自动清理仍会运行，确定关闭吗？';
+$_LANG['cloud_close_update_success'] = '已关闭升级提示';
+$_LANG['cloud_open_update'] = '开启升级提示';
+$_LANG['cloud_open_update_success'] = '已开启升级提示';
+$_LANG['cloud_update_closed_cue'] = '升级提示已关闭，升级还原点入口已隐藏，自动清理仍会运行。';
+$_LANG['cloud_update_closed_manage_cue'] = '点击标题旁「开启升级提示」可恢复。';
+
+// 升级风险提示（更新主页与离线升级页的页头提示行共用）
+$_LANG['cloud_upgrade_backup_tips'] = '升级有风险，建议升级前先做一次数据库备份，';
+$_LANG['cloud_upgrade_backup_btn'] = '立即备份数据库';
+$_LANG['cloud_upgrade_snapshot_tips'] = '，同时系统会自动创建还原点，若升级后发现异常，可从还原点恢复到升级前的状态。';
+
+// 云账户设置
+$_LANG['cloud_account_title'] = 'Dou云账户';
+$_LANG['cloud_account'] = '设置云账户';
+$_LANG['cloud_account_cue'] = '您的云账户没有设置，或者设置不正确，请检查';
+$_LANG['cloud_account_intro'] = '设置云账户后，可使用在线安装模块、模板等云服务功能';
+$_LANG['cloud_account_user'] = '云账户用户名';
+$_LANG['cloud_account_password'] = '云账户密码';
+$_LANG['cloud_account_success'] = '设置云账户成功';
+$_LANG['cloud_account_register'] = '立即注册';
+$_LANG['cloud_account_register_0'] = '没有账户？';
+$_LANG['cloud_account_seted'] = '已经设置云账户';
+$_LANG['cloud_account_reset'] = '重新设置';
+$_LANG['cloud_account_user_wrong'] = '云账户用户名应为有邮箱或手机号，您输入格式不正确或者为空';
+$_LANG['cloud_account_wrong'] = '云账户用户名或密码输入不正确';
+$_LANG['cloud_account_clean'] = '清空云账户';
+$_LANG['cloud_account_clean_success'] = '清空云账户成功';
+
+// 去版权
+$_LANG['cloud_copyright'] = '去版权';
+$_LANG['cloud_copyright_success'] = '前台版权去除成功！';
+$_LANG['cloud_copyright_no_vip'] = '该账号或者该域名没有开通VIP会员！';
+
+// 云端扩展列表（inc/cloud_extend_list.tpl）
+$_LANG['cloud_extend_filter_all'] = '全部';
+$_LANG['cloud_extend_filter_free_theme'] = '免费模板';
+$_LANG['cloud_extend_price_label'] = '费用：';
+$_LANG['cloud_extend_author_label'] = '作者：';
+$_LANG['cloud_extend_need_module_label'] = '支持模块：';
+$_LANG['cloud_extend_preview_theme'] = '预览模板';
+$_LANG['cloud_extend_download_count'] = '下载量：';
+$_LANG['cloud_extend_miniprogram_badge'] = '适配小程序';
+$_LANG['cloud_extend_state_installed'] = '已安装';
+$_LANG['cloud_extend_state_install'] = '未安装';
+$_LANG['cloud_extend_update_time_label'] = '更新时间：';
+$_LANG['cloud_extend_min_version_label'] = '最低版本要求：';
+$_LANG['cloud_extend_detail'] = '详细信息';
+
+// 模板安装确认弹窗（cloud_extend_action.tpl 中 theme 的安装按钮）
+$_LANG['cloud_theme_install_popup_title'] = '安装提示';
+$_LANG['cloud_theme_install_popup_text'] = '模板名称：{theme}；支持模块：{modules}';
+$_LANG['cloud_theme_install_popup_no_module'] = '无';
+
+// 升级还原点（T7：unzip 与 apply 之间的快照步骤）
+$_LANG['cloud_snapshot_ing'] = '正在创建升级还原点…';
+$_LANG['cloud_snapshot_begin'] = '开始创建升级还原点（升级失败时用于回滚）…';
+$_LANG['cloud_snapshot_done'] = '升级还原点已创建：d%';
+$_LANG['cloud_snapshot_engine_missing'] = '还原点引擎缺失（core/service/upgrade 未随包更新），无法创建升级还原点，升级已中止';
+$_LANG['cloud_snapshot_restored'] = '本次更新失败，已从升级还原点自动回滚：文件与数据库均恢复为更新前状态';
+$_LANG['cloud_snapshot_restore_failed'] = '本次更新失败，自动回滚未完成：d%；请在「设置 - 系统更新 - 升级还原点」页继续或手动恢复';
+$_LANG['cloud_snapshot_restore_pending'] = '本次更新失败，自动回滚超时；请在「设置 - 系统更新 - 升级还原点」页继续恢复';
+
+// 完成态安全提示与进行中秒表（cloud/install）
+$_LANG['cloud_finish_note_system'] = '提示：升级前已自动创建还原点（含站点文件与数据库）；若升级后发现异常，可将站点恢复到升级前的状态：';
+$_LANG['cloud_finish_note_module'] = '提示：更新前已自动创建还原点（含本次涉及的文件与数据库）；若更新后发现异常，可将模块恢复到更新前的状态：';
+$_LANG['cloud_finish_note_theme'] = '提示：更新前已自动创建还原点（含模板文件）；若更新后发现异常，可将模板恢复到更新前的状态：';
+$_LANG['cloud_finish_note_plugin'] = '提示：更新前已自动创建还原点（含插件文件）；若更新后发现异常，可将插件恢复到更新前的状态：';
+$_LANG['cloud_finish_note_view'] = '查看还原点';
+$_LANG['cloud_step_elapsed'] = '已用时 d% 秒';

@@ -1,0 +1,94 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="copyright" content="DouCo Co.,Ltd." />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="csrf-token" content="{$csrf_token}">
+<title>{$lang.home}{if $ur_here} - {$ur_here} {/if}</title>
+<link href="{$site.root_url}favicon.ico" rel="shortcut icon" type="image/x-icon" />
+<link href="css/bootstrap-icons.css" rel="stylesheet" type="text/css">
+<link href="css/common.css" rel="stylesheet" type="text/css">
+{include file="inc/javascript.tpl"}
+</head>
+<body>
+<div id="dou"> {include file="inc/header.tpl"}
+ {include file="inc/sidebar.tpl"}
+ <div id="dou-content"> {include file="inc/toolbar.tpl"}
+  <div class="dou-main">
+   <div class="dou-page">
+   <!-- {if $rec eq 'default'} 分类列表 -->
+   {include file="inc/page_header.tpl"}
+   <table class="table">
+    <tr>
+     <th width="120" class="text-left">{$lang.attribute_name}</th>
+     <th class="text-left">{$lang.attribute_category}</th>
+     <th class="m-none text-left">{$lang.attribute_type}</th>
+     <th class="m-none text-center" width="60">{$lang.sort}</th>
+     <th width="80" class="text-center">{$lang.handler}</th>
+    </tr>
+    <!-- {foreach from=$attribute_list item=item} -->
+    <tr>
+     <td class="text-left">{$item.name}</td>
+     <td>{$item.category_name}</td>
+     <td class="m-none">{$item.type}</td>
+     <td class="m-none text-center">{$item.sort}</td>
+     <td class="text-center"><a href="{url link='admin.attribute.edit' id=$item.att_id}">{$lang.edit}</a> | <a href="javascript:;" class="js-delete" data-url="{url link='admin.attribute.destroy' id=$item.att_id}">{$lang.del}</a></td>
+    </tr>
+    <!-- {/foreach} -->
+   </table>
+   <!-- {/if} -->
+   <!-- {if $rec eq 'create' || $rec eq 'edit'} 分类添加或编辑 -->
+   {include file="inc/page_header.tpl"}
+   <form action="{$form_action}" method="post"><input type="hidden" name="_method" value="{$form_method}" />
+    {include file="inc/language_drafts.tpl" drafts=$lang_drafts}
+    <div class="form">
+     <div class="form-item">
+      <div class="form-label">{$lang.attribute_name}</div>
+      <div class="input-block">
+       <input type="text" name="name" value="{$attribute.name}" size="40" class="input" />
+       <span class="action" data-field="name">{$btn_lang.name nofilter}</span>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.attribute_category}</div>
+      <div class="input-block">
+       <select class="select" name="category_id">
+        <option value="0">{$lang.attribute_category_all}</option>
+        <!-- {foreach from=$product_category item=cate} -->
+        <option value="{$cate.id}"{if $cate.id eq $attribute.category_id} selected="selected"{/if}>{$cate.mark} {$cate.name}</option>
+        <!-- {/foreach} -->
+       </select>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.attribute_type}</div>
+      <div class="input-block">
+       <label for="type_text">
+        <input type="radio" name="type" id="type_text" value="text"{if $attribute.type eq 'text' || !$attribute.type} checked="true"{/if}>
+        {$lang.attribute_type_text}</label>
+       <label for="type_image">
+        <input type="radio" name="type" id="type_image" value="image"{if $attribute.type eq 'image'} checked="true"{/if}>
+        {$lang.attribute_type_image}</label>
+      </div>
+     </div>
+     <div class="form-item">
+      <div class="form-label">{$lang.sort}</div>
+      <div class="input-block">
+       <input type="text" name="sort" value="{if $attribute.sort}{$attribute.sort}{else}50{/if}" size="5" class="input" />
+      </div>
+     </div>
+     <div class="form-item">
+      <input type="hidden" name="token" value="{$token}" />
+      <input type="hidden" name="att_id" value="{$attribute.att_id}" />
+      <input class="btn" type="submit" value="{$lang.btn_submit}" />
+     </div>
+    </div>
+   </form>
+   <!-- {/if} -->
+  </div>
+ </div>
+  </div>
+ {include file="inc/footer.tpl"} </div>
+</body>
+</html>

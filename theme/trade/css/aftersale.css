@@ -1,0 +1,263 @@
+/* 售后服务.列表
+----------------------------------------------- */
+/* list */
+#aftersale .list {
+ 
+}
+#aftersale .list .item {
+ background-color:#FFF;
+ margin-top: 5px;
+}
+#aftersale .list .item a {
+ color: #0072C6;
+}
+#aftersale .list .item .text {
+ color: #999;
+}
+#aftersale .list .item .head {
+ background-color:#FFF;
+ padding: 10px;
+}
+#aftersale .list .item .head .aftersaleSn {
+ font-weight: bold;
+}
+#aftersale .list .item .head .time {
+ float: right;
+ color: #999;
+}
+#aftersale .list .item .orderSn {
+ border-top: 1px solid #EEE;
+ padding: 10px 10px 5px 10px;
+}
+#aftersale .list .item .itemList {
+ padding: 10px;
+ background-color: #F8F8F8;
+}
+#aftersale .list .item .reason {
+ padding: 10px;
+}
+#aftersale .list .item .handle {
+ padding: 10px;
+ background-color: #EEE;
+}
+#aftersale .list .item .handle b {
+ color: red;
+}
+/* 售后服务.申请
+----------------------------------------------- */
+#aftersale .apply {
+ padding-top: 20px;
+}
+#aftersale .apply .head {
+ background-color: #FFF;
+ font-weight: bold;
+ margin-bottom: 5px;
+ font-size: 13px;
+}
+#aftersale .apply .head em {
+ color: #999;
+}
+#aftersale .apply .cueGray {
+ color: #999;
+}
+/* itemList */
+#aftersale .apply .itemList {
+ background-color:#FFF;
+ margin-bottom: 20px;
+ border-top: 1px solid #EEE;
+}
+#aftersale .apply .itemList dl {
+ zoom:1;
+ overflow:hidden;
+ border-bottom: 1px solid #EEE;
+ padding:10px 10px;
+ margin-bottom:3px;
+}
+#aftersale .apply .itemList dl dt {
+ width:60px;
+ float:left;
+ margin-right:10px;
+ line-height:38px;
+ position: relative;
+ padding-left: 20px;
+}
+#aftersale .apply .itemList dl dt input {
+ position: absolute;
+ left: 0;
+ top: 50%;
+ margin-top: -5px;
+}
+#aftersale .apply .itemList dl dd {
+ margin-left: 90px;
+}
+#aftersale .apply .itemList dl dd p {
+ float:left;
+ width:60%;
+ font-weight:bold;
+}
+#aftersale .apply .itemList dl dd span {
+ float:right;
+ text-align:right;
+ color:#888;
+}
+/*- fileBox -*/
+#aftersale .apply .fileBox {
+ zoom: 1;
+ overflow: hidden;
+}
+#aftersale .apply .fileBox .fileAdd {
+ float: left;
+}
+#aftersale .apply .fileBox .fileAdd li {
+ width: 80px;
+ height: 80px;
+ line-height: 80px;
+ text-align: center;
+ border: 1px dotted #CCCCCC;
+ background-color: #EEE;
+ cursor: pointer;
+ font-size: 14px;
+}
+#aftersale .apply .fileBox .fileAdd li img {
+ margin-top: 40px;
+}
+#aftersale .apply .fileBox .fileList {
+ margin-left: 80px;
+ zoom: 1;
+ overflow: hidden;
+}
+#aftersale .apply .fileBox .fileList li {
+ float: left;
+ border: 1px dotted #CCCCCC;
+ height: 80px;
+ overflow: hidden;
+ margin-left: 10px;
+ position: relative;
+}
+#aftersale .apply .fileBox .fileList li img {
+ width: 80px;
+ height: 80px;
+}
+#aftersale .apply .fileBox .fileList li span {
+ display: none;
+ background-color: #60BBFF;
+ color: #FFF;
+ width: 20px;
+ height: 20px;
+ text-align: center;
+ line-height: 20px;
+ cursor: pointer;
+ position: absolute;
+ bottom: 0;
+ right: 0;
+}
+#aftersale .apply .fileBox .fileList li:hover span {
+ display: block;
+}
+/* 售后服务.详情
+----------------------------------------------- */
+#aftersale .detail .item {
+ background-color: #FFF;
+ border: 1px solid #EEE;
+ border-radius: 4px;
+ zoom: 1;
+ overflow: hidden;
+}
+#aftersale .detail .item .head {
+ padding: 10px;
+ border-bottom: 1px solid #EEE;
+ zoom: 1;
+ overflow: hidden;
+}
+#aftersale .detail .item .head .aftersaleSn {
+ font-weight: bold;
+}
+#aftersale .detail .item .head .time {
+ float: right;
+ color: #999;
+}
+#aftersale .detail .item .orderSn {
+ padding: 8px 10px;
+ color: #666;
+ border-top: 1px solid #F5F5F5;
+}
+#aftersale .detail .item .head + .orderSn {
+ border-top: 0;
+}
+#aftersale .detail .item .orderSn a {
+ color: #0072C6;
+}
+#aftersale .detail .item .itemList {
+ padding: 10px;
+ background-color: #F8F8F8;
+ border-top: 1px solid #EEE;
+}
+#aftersale .detail .item .itemList img {
+ margin-right: 5px;
+ vertical-align: middle;
+}
+#aftersale .detail .item .reason {
+ padding: 10px;
+ line-height: 1.8;
+}
+#aftersale .detail .item .reason img {
+ height: 30px;
+ margin-left: 5px;
+ vertical-align: middle;
+}
+#aftersale .detail .text {
+ font-style: normal;
+ color: #999;
+}
+/* 寄回信息 / 寄回运单 / 协商时间线 */
+#aftersale .detail .returnInfo,
+#aftersale .detail .returnShip,
+#aftersale .detail .timeline {
+ margin-top: 10px;
+ padding: 12px;
+ background-color: #FFF;
+ border: 1px solid #EEE;
+ border-radius: 4px;
+}
+#aftersale .detail .returnInfo .title,
+#aftersale .detail .returnShip .title,
+#aftersale .detail .timeline .title {
+ padding-left: 8px;
+ margin-bottom: 10px;
+ font-weight: bold;
+ border-left: 3px solid #0072C6;
+}
+#aftersale .detail .returnInfo p {
+ color: #666;
+ line-height: 1.8;
+}
+#aftersale .detail .returnShip p {
+ margin-bottom: 8px;
+}
+#aftersale .detail .returnShip label {
+ color: #666;
+}
+#aftersale .detail .returnShip .input {
+ width: 220px;
+ margin-left: 5px;
+ vertical-align: middle;
+}
+#aftersale .detail .cancel {
+ margin-top: 10px;
+ text-align: right;
+}
+#aftersale .detail .timeline ul li {
+ padding: 6px 0;
+ color: #666;
+ border-bottom: 1px dashed #EEE;
+}
+#aftersale .detail .timeline ul li:last-child {
+ border-bottom: 0;
+}
+#aftersale .detail .timeline ul li .time {
+ margin-right: 6px;
+ color: #999;
+}
+#aftersale .detail > p {
+ margin-top: 15px;
+}
